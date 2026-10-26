@@ -102,6 +102,23 @@ fun DtoTagSubject.toSubject(type: SubjectType): Subject {
     }
 }
 
+/** 官方信息流的条目：`card_subtitle` 自带「年份 / 地区 / 体裁 / 导演 / 演员」，直接拿来当副标题。 */
+fun DtoRecommendSubject.toFeedSubject(fallbackType: SubjectType): Subject? {
+    if (id.isBlank()) return null
+    // 信息流混着榜单卡/广告卡，它们没有条目 id，点了会开错页。
+    if (!card.isNullOrEmpty() && card != "subject") return null
+    val resolved = type?.let(SubjectType::fromString) ?: fallbackType
+    val imageUrl = pic?.large ?: pic?.normal.orEmpty()
+    val subtitle = cardSubtitle.orEmpty()
+    val link = uri ?: url.orEmpty()
+    val rating = rating.toRating()
+    return when (resolved) {
+        SubjectType.TV -> Tv(id, rating, subtitle, title, imageUrl, link)
+        SubjectType.MOVIE -> Movie(id, rating, subtitle, title, imageUrl, link)
+        else -> Subject.Unsupported(id, rating, title, subtitle, imageUrl, link)
+    }
+}
+
 fun DtoSearchSubject.toSubject(type: SubjectType, yearHint: String? = null): Subject {
     val score = rate?.toFloatOrNull()
     val rating = if (score == null || score <= 0f) Rating.Null("") else Rating.NonNull(score, 10)

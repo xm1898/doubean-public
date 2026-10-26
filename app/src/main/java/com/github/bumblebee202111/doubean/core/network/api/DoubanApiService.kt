@@ -145,6 +145,29 @@ class DoubanApiService @Inject constructor(
         return response.data
     }
 
+    /**
+     * 官方「选电影 / 选剧集」页的信息流，`sort` 取 T(综合)/U(近期热度)/R(首映时间)/S(高分优先)。
+     *
+     * 只有这个接口的 R 才真的是「按首映时间」；`/j/new_search_subjects` 的 sort=T 是假的。
+     */
+    suspend fun recommendFeed(
+        type: String,
+        sort: String,
+        start: Int,
+        count: Int,
+        tags: String? = null,
+    ): com.github.bumblebee202111.doubean.core.network.model.NetworkRecommendFeed =
+        client.get("$REXXAR_BASE/$type/recommend") {
+            header("Referer", "https://movie.douban.com/explore")
+            parameter("refresh", 0)
+            parameter("start", start)
+            parameter("count", count)
+            parameter("sort", sort)
+            parameter("selected_categories", "{}")
+            parameter("uncollect", "false")
+            if (!tags.isNullOrBlank()) parameter("tags", tags)
+        }.body()
+
     suspend fun suggest(q: String): List<DtoSuggestItem> =
         try {
             client.get("$MOVIE_WEB/j/subject_suggest") {

@@ -161,6 +161,21 @@ class SubjectRepository @Inject constructor(
             api.suggest(query).map { it.toSearchResultItem(type) }
         }
 
+    /**
+     * 官方「选电影 / 选剧集」信息流。`sort=R` 是按首映时间，这才是真·时间排序。
+     */
+    suspend fun premiereFeed(
+        type: SubjectType,
+        sort: String,
+        start: Int,
+        count: Int,
+        tags: String? = null,
+    ): AppResult<List<Subject>> = call {
+        api.recommendFeed(type.apiValue(), sort, start, count, tags)
+            .items
+            .mapNotNull { it.toFeedSubject(type) }
+    }
+
     /* ----------------------------- 工具 ----------------------------- */
 
     private suspend fun <T> call(block: suspend () -> T): AppResult<T> = withContext(Dispatchers.IO) {
