@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -119,7 +120,7 @@ fun DetailScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                items(credits!!.items, key = { it.id + it.name }) { celebrity ->
+                                itemsIndexed(credits!!.items.distinctBy { it.id + it.name }, key = { index, celebrity -> "$index:${celebrity.id}" }) { _, celebrity ->
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.width(72.dp),
@@ -161,7 +162,7 @@ fun DetailScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                items(photos!!.photos, key = { it.id ?: it.image.large.url }) { photo ->
+                                itemsIndexed(photos!!.photos.distinctBy { it.id ?: it.image.large.url }, key = { index, photo -> "$index:${photo.id ?: photo.image.large.url}" }) { _, photo ->
                                     AsyncImage(
                                         model = photo.image.normal.url,
                                         contentDescription = null,
@@ -183,7 +184,7 @@ fun DetailScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                items(recommendations, key = { it.id + it.title }) { subject ->
+                                itemsIndexed(recommendations.distinctBy { it.id }, key = { index, subject -> "$index:${subject.id}" }) { _, subject ->
                                     SubjectCard(
                                         subject = subject,
                                         onClick = { onOpenDetail(it.id, it.type) },

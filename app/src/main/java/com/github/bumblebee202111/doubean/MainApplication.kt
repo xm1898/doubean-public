@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import com.github.bumblebee202111.doubean.util.CrashLogger
 import com.topjohnwu.superuser.Shell
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -15,6 +16,11 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
     lateinit var imageLoader: ImageLoader
 
     override fun newImageLoader(context: Context): ImageLoader = imageLoader
+
+    override fun onCreate() {
+        super.onCreate()
+        CrashLogger.install(this)
+    }
 
     init {
         Shell.enableVerboseLogging = BuildConfig.DEBUG

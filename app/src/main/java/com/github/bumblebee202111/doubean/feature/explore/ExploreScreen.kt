@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -107,6 +108,7 @@ fun ExploreScreen(
                             text = sort.label,
                             selected = filters.sort == sort,
                             onClick = { viewModel.setSort(sort) },
+                            tag = "sort_pill_${sort.name}",
                         )
                     }
                 }
@@ -202,8 +204,9 @@ fun ExploreScreen(
                                 .fillMaxSize()
                                 .testTag("explore_grid"),
                         ) {
-                            // key 只用 id：翻页时同一部片可能再次返回，拼接 title 反而会撞 key 崩溃。
-                            items(state.data, key = { it.id }) { subject ->
+                            // key 用「下标 + id」：豆瓣推荐流会重复返回同一部片，只靠 id 仍可能撞 key，
+                            // 撞了 LazyGrid 直接抛 "Key was already used" 闪退。
+                            itemsIndexed(state.data, key = { index, subject -> "$index:${subject.id}" }) { _, subject ->
                                 SubjectCard(
                                     subject = subject,
                                     width = 104,
@@ -273,7 +276,12 @@ private fun FilterRow(
 }
 
 @Composable
-private fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun FilterPill(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    tag: String? = null,
+) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
@@ -287,7 +295,9 @@ private fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit) {
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
-        modifier = Modifier.height(28.dp),
+        modifier = Modifier
+            .height(28.dp)
+            .then(if (tag != null) Modifier.testTag(tag) else Modifier),
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 10.dp),
