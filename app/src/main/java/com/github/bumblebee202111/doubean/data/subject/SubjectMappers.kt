@@ -102,10 +102,11 @@ fun DtoTagSubject.toSubject(type: SubjectType): Subject {
     }
 }
 
-fun DtoSearchSubject.toSubject(type: SubjectType): Subject {
+fun DtoSearchSubject.toSubject(type: SubjectType, yearHint: String? = null): Subject {
     val score = rate?.toFloatOrNull()
     val rating = if (score == null || score <= 0f) Rating.Null("") else Rating.NonNull(score, 10)
-    val subtitle = buildList {
+    // 搜索接口不返回年份；按年份翻页时把年份传进来，卡片上才看得出「新片在前」。
+    val subtitle = yearHint ?: buildList {
         directors.firstOrNull()?.let { add(it) }
         casts.take(2).joinToString(" ").takeIf { it.isNotEmpty() }?.let(::add)
     }.joinToString(" / ")

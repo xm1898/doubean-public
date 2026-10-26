@@ -63,6 +63,14 @@ class ExploreViewModel @Inject constructor(
     private var start = 0
     private var job: Job? = null
 
+    // 「时间排序 + 年份=全部」时按年份倒着翻：先 2026，再 2025…，保证新片永远在最前面。
+    private var yearCursor = 0
+    private var yearStart = 0
+
+    /** 豆瓣的 sort=T 在「年份=全部」下并不按年份倒序，只能自己按年份往回走。 */
+    private val ExploreFilters.isTimeCrawl: Boolean
+        get() = sort == ExploreSort.TIME && year == "全部"
+
     fun start(type: SubjectType) {
         if (started && _type.value == type) return
         started = true
@@ -112,9 +120,17 @@ class ExploreViewModel @Inject constructor(
         job?.cancel()
         start = 0
         _exhausted.value = false
+        val filters = _filters.value
         job = viewModelScope.launch {
             _items.value = UiState.Loading
-            val filters = _filters.value
+            if (filters.isTimeCrawl) {
+                yearCursor = MAX_YEAR
+                yearStart = 0
+                val result = fetchTimeChunk(filters, PAGE_SIZE)
+                _items.value = result.toUiState()
+                if (result is AppResult.Success && result.data.size < PAGE_SIZE) _exhausted.value = true
+                return@launch
+            }
             val result = repository.explore(
                 tags = buildTags(filters),
                 sort = filters.sort.apiValue,
@@ -132,9 +148,24 @@ class ExploreViewModel @Inject constructor(
         val current = _items.value
         if (current !is UiState.Success) return
         if (_loadingMore.value || _exhausted.value) return
+        val filters = _filters.value
         job = viewModelScope.launch {
             _loadingMore.value = true
-            val filters = _filters.value
+            if (filters.isTimeCrawl) {
+                val result = fetchTimeChunk(filters, PAGE_SIZE)
+                when (result) {
+                    is AppResult.Success -> {
+                        if (result.data.isEmpty() || result.data.size < PAGE_SIZE) _exhausted.value = true
+                        if (result.data.isNotEmpty()) {
+                            _items.value = UiState.Success(current.data + result.data)
+                        }
+                    }
+
+                    is AppResult.Error -> _exhausted.value = true
+                }
+                _loadingMore.value = false
+                return@launch
+            }
             val result = repository.explore(
                 tags = buildTags(filters),
                 sort = filters.sort.apiValue,
@@ -158,11 +189,50 @@ class ExploreViewModel @Inject constructor(
         }
     }
 
-    private fun buildTags(filters: ExploreFilters): List<String> = buildList {
+    /**
+     * 从 [yearCursor] 开始按年份倒序取，凑够 [target] 条或翻到 [MIN_YEAR] 为止。
+     *
+     * 每翻完一年游标就减一，所以「时间」排序天然从最新往回走；接口没有 total，
+     * 靠「这一年返回不满 20 条」判断该年翻完。
+     */
+    private suspend fun fetchTimeChunk(
+        filters: ExploreFilters,
+        target: Int,
+    ): AppResult<List<Subject>> {
+        val acc = mutableListOf<Subject>()
+        var hops = 0
+        while (acc.size < target && yearCursor >= MIN_YEAR && hops++ < MAX_YEAR_HOPS) {
+            val year = yearCursor.toString()
+            val result = repository.explore(
+                tags = buildTags(filters, year),
+                sort = ExploreSort.TIME.apiValue,
+                start = yearStart,
+                range = ratingRange(filters.rating),
+                type = _type.value,
+                yearHint = year,
+            )
+            when (result) {
+                is AppResult.Error -> return if (acc.isEmpty()) result else AppResult.Success(acc)
+                is AppResult.Success -> {
+                    acc += result.data
+                    if (result.data.size < PAGE_SIZE) {
+                        yearCursor--
+                        yearStart = 0
+                    } else {
+                        yearStart += PAGE_SIZE
+                    }
+                }
+            }
+        }
+        return AppResult.Success(acc)
+    }
+
+    private fun buildTags(filters: ExploreFilters, yearOverride: String? = null): List<String> = buildList {
         add(filters.category)
         if (filters.genre != "全部") add(filters.genre)
         if (filters.region != "全部") add(filters.region)
-        if (filters.year != "全部") add(filters.year)
+        val year = yearOverride ?: filters.year.takeIf { it != "全部" }
+        if (year != null) add(year)
     }
 
     companion object {
@@ -206,6 +276,14 @@ class ExploreViewModel @Inject constructor(
         )
 
         val RATINGS = listOf("全部", "9分以上", "8分以上", "7分以上", "6分以上", "5分以下")
+
+        /** 「时间」排序从这一年开始往前翻（取年份列表里最新的那一年）。 */
+        val MAX_YEAR: Int = YEARS.firstNotNullOfOrNull { it.toIntOrNull() } ?: 2026
+
+        const val MIN_YEAR = 1980
+
+        /** 单次加载最多换几个年份，避免极端情况下一直空转到卡死。 */
+        const val MAX_YEAR_HOPS = 12
 
         /** 豆瓣 `range` 参数是「评分下限,上限」。 */
         fun ratingRange(label: String): String = when (label) {

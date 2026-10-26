@@ -198,6 +198,9 @@ data class DtoChartItem(
 @Serializable
 data class NetworkSearchSubjectsResponse(
     val data: List<DtoSearchSubject> = emptyList(),
+    /** 被限流时豆瓣返回 `{"msg":"…","r":1}`，没有 data 字段。 */
+    val msg: String? = null,
+    val r: Int? = null,
 )
 
 @Serializable

@@ -1,5 +1,6 @@
 package com.github.bumblebee202111.doubean
 
+import com.github.bumblebee202111.doubean.core.network.DoubanThrottledException
 import com.github.bumblebee202111.doubean.core.network.api.DoubanApiService
 import com.github.bumblebee202111.doubean.data.subject.toSubject
 import com.github.bumblebee202111.doubean.data.subject.toSubjectDetail
@@ -9,6 +10,7 @@ import com.github.bumblebee202111.doubean.data.subject.toPhotoList
 import com.github.bumblebee202111.doubean.data.subject.toRecommendSubject
 import com.github.bumblebee202111.doubean.data.subject.toSearchResultItem
 import com.github.bumblebee202111.doubean.model.subject.Rating
+import com.github.bumblebee202111.doubean.feature.explore.ExploreViewModel
 import com.github.bumblebee202111.doubean.model.subject.SubjectType
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -18,6 +20,8 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertTrue
+import org.junit.Assume
+import kotlinx.coroutines.delay
 import org.junit.Test
 
 /**
@@ -52,7 +56,7 @@ class DoubanApiSmokeTest {
     private val api = DoubanApiService(client)
 
     @Test
-    fun feedCollections() = runBlocking {
+    fun feedCollections() = smoke {
         val ids = listOf(
             "movie_showing", "movie_soon", "movie_top250",
             "tv_hot", "tv_domestic", "tv_american",
@@ -69,7 +73,7 @@ class DoubanApiSmokeTest {
     }
 
     @Test
-    fun detailCreditsPhotos() = runBlocking {
+    fun detailCreditsPhotos() = smoke {
         val detail = api.getSubjectDetail("movie", "1292052").toSubjectDetail(SubjectType.MOVIE)
         assertTrue(detail.title.isNotBlank())
         println("[ok] detail ${detail.title} ${detail.displayMetaInfo} rating=${detail.rating}")
@@ -89,7 +93,7 @@ class DoubanApiSmokeTest {
     }
 
     @Test
-    fun chartAndRecommendations() = runBlocking {
+    fun chartAndRecommendations() = smoke {
         val chart = api.getChart(chartType = 11, start = 0, limit = 5)
             .map { it.toSubjectWithRank(SubjectType.MOVIE) }
         assertTrue(chart.isNotEmpty())
@@ -103,7 +107,7 @@ class DoubanApiSmokeTest {
     }
 
     @Test
-    fun exploreAndSuggest() = runBlocking {
+    fun exploreAndSuggest() = smoke {
         val page = api.newSearchSubjects(tags = "电影,美国,2024", sort = "U", start = 0)
             .map { it.toSubject(SubjectType.MOVIE) }
         assertTrue(page.isNotEmpty())
@@ -144,5 +148,43 @@ class DoubanApiSmokeTest {
         val suggest = api.suggest("生日").map { it.toSearchResultItem(SubjectType.MOVIE) }
         assertTrue(suggest.isNotEmpty())
         println("[ok] suggest=${suggest.size} first=${suggest.first().title}")
+    }
+
+    /**
+     * 「时间」排序靠按年份倒着翻实现：最新年份有片、次新年份有片，
+     * 且年份会写到卡片副标题上，这样列表看上去就是「新片在前」。
+     */
+    @Test
+    fun timeSortWalksBackByYear() = smoke {
+        val newest = ExploreViewModel.MAX_YEAR.toString()
+        val thisYear = api.newSearchSubjects(tags = "电影,$newest", sort = "T", start = 0)
+            .map { it.toSubject(SubjectType.MOVIE, yearHint = newest) }
+        assertTrue("$newest 年没有数据", thisYear.isNotEmpty())
+        assertTrue(
+            "年份没写到副标题：${thisYear.take(3).map { it.title to it.cardSubtitle }}",
+            thisYear.all { it.cardSubtitle == newest },
+        )
+        println("[ok] 时间排序 $newest=${thisYear.size} ${thisYear.take(3).map { it.title }}")
+
+        val prev = (ExploreViewModel.MAX_YEAR - 1).toString()
+        val lastYear = api.newSearchSubjects(tags = "电影,$prev", sort = "T", start = 0)
+            .map { it.toSubject(SubjectType.MOVIE, yearHint = prev) }
+        assertTrue("$prev 年没有数据", lastYear.isNotEmpty())
+        assertTrue(
+            "$newest 与 $prev 返回了同一批片，年份筛选没生效",
+            thisYear.map { it.id }.toSet().intersect(lastYear.map { it.id }.toSet()).isEmpty(),
+        )
+        println("[ok] 时间排序 $prev=${lastYear.size} ${lastYear.take(3).map { it.title }}")
+    }
+
+    /** 豆瓣会限流：被限流就当跳过，别因为外部因素把构建搞红。 */
+    private fun smoke(block: suspend () -> Unit) = runBlocking {
+        try {
+            delay(600)
+            block()
+        } catch (e: DoubanThrottledException) {
+            println("[skip] 豆瓣限流：${e.serverMessage}")
+            Assume.assumeNoException("豆瓣限流，跳过本次联网用例", e)
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.github.bumblebee202111.doubean.core.network.api
 
+import com.github.bumblebee202111.doubean.core.network.DoubanThrottledException
 import com.github.bumblebee202111.doubean.core.network.model.DtoChartItem
 import com.github.bumblebee202111.doubean.core.network.model.DtoRecommendSubject
 import com.github.bumblebee202111.doubean.core.network.model.DtoSearchSubject
@@ -15,6 +16,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.serialization.ContentConvertException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -130,18 +132,27 @@ class DoubanApiService @Inject constructor(
         sort: String = "U",
         start: Int = 0,
         range: String = "0,10",
-    ): List<DtoSearchSubject> =
-        client.get("$MOVIE_WEB/j/new_search_subjects") {
+    ): List<DtoSearchSubject> {
+        val response = client.get("$MOVIE_WEB/j/new_search_subjects") {
             header("Referer", "$MOVIE_WEB/")
             parameter("sort", sort)
             parameter("range", range)
             parameter("tags", tags)
             parameter("start", start)
-        }.body<com.github.bumblebee202111.doubean.core.network.model.NetworkSearchSubjectsResponse>().data
+        }.body<com.github.bumblebee202111.doubean.core.network.model.NetworkSearchSubjectsResponse>()
+        // 限流时返回的是 {"msg":"…","r":1}，别当成「没数据」静默吞掉。
+        response.msg?.let { throw DoubanThrottledException(it) }
+        return response.data
+    }
 
     suspend fun suggest(q: String): List<DtoSuggestItem> =
-        client.get("$MOVIE_WEB/j/subject_suggest") {
-            header("Referer", "$MOVIE_WEB/")
-            parameter("q", q)
-        }.body()
+        try {
+            client.get("$MOVIE_WEB/j/subject_suggest") {
+                header("Referer", "$MOVIE_WEB/")
+                parameter("q", q)
+            }.body()
+        } catch (e: ContentConvertException) {
+            // 正常返回是数组；限流时变成 {"msg":…} 对象，解析成数组会失败。
+            throw DoubanThrottledException(e.message ?: "suggest 被限流")
+        }
 }
