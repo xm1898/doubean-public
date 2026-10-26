@@ -162,7 +162,8 @@ class SubjectRepository @Inject constructor(
         }
 
     /**
-     * 官方「选电影 / 选剧集」信息流。`sort=R` 是按首映时间，这才是真·时间排序。
+     * 官方「选电影 / 选剧集」信息流。`sort=R` 是按首映时间，这才是真·时间排序；
+     * `tags` 管体裁/地区/年份，`scoreRange` 管评分区间，都是服务端过滤。
      */
     suspend fun premiereFeed(
         type: SubjectType,
@@ -170,8 +171,9 @@ class SubjectRepository @Inject constructor(
         start: Int,
         count: Int,
         tags: String? = null,
+        scoreRange: String = "0,10",
     ): AppResult<List<Subject>> = call {
-        api.recommendFeed(type.apiValue(), sort, start, count, tags)
+        api.recommendFeed(type.apiValue(), sort, start, count, tags, scoreRange)
             .items
             .mapNotNull { it.toFeedSubject(type) }
     }

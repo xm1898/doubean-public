@@ -149,6 +149,9 @@ class DoubanApiService @Inject constructor(
      * 官方「选电影 / 选剧集」页的信息流，`sort` 取 T(综合)/U(近期热度)/R(首映时间)/S(高分优先)。
      *
      * 只有这个接口的 R 才真的是「按首映时间」；`/j/new_search_subjects` 的 sort=T 是假的。
+     * `tags` 是「体裁,地区,年份」逗号串，`scoreRange` 是「评分下限,上限」（如 `8,10`），
+     * 两个都由服务端过滤。`selected_categories` 实测不生效（传「类型=国产剧」照样返回日剧韩剧），
+     * 所以固定传空对象。
      */
     suspend fun recommendFeed(
         type: String,
@@ -156,6 +159,7 @@ class DoubanApiService @Inject constructor(
         start: Int,
         count: Int,
         tags: String? = null,
+        scoreRange: String = "0,10",
     ): com.github.bumblebee202111.doubean.core.network.model.NetworkRecommendFeed =
         client.get("$REXXAR_BASE/$type/recommend") {
             header("Referer", "https://movie.douban.com/explore")
@@ -165,6 +169,7 @@ class DoubanApiService @Inject constructor(
             parameter("sort", sort)
             parameter("selected_categories", "{}")
             parameter("uncollect", "false")
+            parameter("score_range", scoreRange)
             if (!tags.isNullOrBlank()) parameter("tags", tags)
         }.body()
 
