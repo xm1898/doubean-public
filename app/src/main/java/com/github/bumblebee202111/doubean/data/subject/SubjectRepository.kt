@@ -142,12 +142,14 @@ class SubjectRepository @Inject constructor(
         tags: List<String>,
         sort: String,
         start: Int = 0,
+        range: String = "0,10",
         type: SubjectType = SubjectType.MOVIE,
     ): AppResult<List<Subject>> = call {
         api.newSearchSubjects(
             tags = tags.filter { it.isNotBlank() }.joinToString(","),
             sort = sort,
             start = start,
+            range = range,
         ).map { it.toSubject(type) }
     }
 

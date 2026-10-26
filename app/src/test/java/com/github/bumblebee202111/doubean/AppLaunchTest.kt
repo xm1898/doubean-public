@@ -2,6 +2,8 @@ package com.github.bumblebee202111.doubean
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -84,7 +86,7 @@ class AppLaunchTest {
         assertTrue("首页数据没有加载出来（检查网络）", loaded)
     }
 
-    /** 首页 → 找电影 → 详情 的导航链路。 */
+    /** 首页 → 找电影 → 组合筛选 → 详情 的导航链路。 */
     @Test
     fun navigateToExploreAndDetail() {
         rule.mainClock.autoAdvance = false
@@ -92,10 +94,51 @@ class AppLaunchTest {
 
         // 找电影
         rule.onAllNodesWithText("找电影").onFirst().performClick()
-        waitUntilText("类型", 20_000)
-        assertTrue(rule.onAllNodesWithText("地区").fetchSemanticsNodes().isNotEmpty())
-        assertTrue(rule.onAllNodesWithText("排序").fetchSemanticsNodes().isNotEmpty())
+        waitUntilText("综合", 20_000)
         waitUntilTag("subject_card", 30_000)
+
+        // 展开筛选面板：类型 / 体裁 / 地区 / 年份 / 评分 五行都在
+        rule.onAllNodesWithTag("filter_toggle").onFirst().performClick()
+        waitUntilText("类型", 10_000)
+        assertTrue(rule.onAllNodesWithText("体裁").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("地区").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("年份").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("评分").fetchSemanticsNodes().isNotEmpty())
+
+        // 展开动画要跑完，否则点击会落在动画中途的坐标上
+        rule.mainClock.advanceTimeBy(800)
+        rule.mainClock.advanceTimeBy(800)
+
+        // 体裁=喜剧 + 评分=8分以上 + 排序=时间，三者叠加后重新出结果
+        rule.onAllNodesWithText("喜剧").onFirst().performClick()
+        rule.mainClock.advanceTimeBy(500)
+        val afterGenre = toggleText()
+        rule.onAllNodesWithText("8分以上").onFirst().performClick()
+        rule.mainClock.advanceTimeBy(500)
+        val afterRating = toggleText()
+        rule.onAllNodesWithText("时间").onFirst().performClick()
+        rule.mainClock.advanceTimeBy(500)
+        val afterSort = toggleText()
+        assertTrue(
+            "genre=$afterGenre rating=$afterRating sort=$afterSort",
+            rule.onAllNodesWithText("筛选 2").fetchSemanticsNodes().isNotEmpty(),
+        )
+        waitUntilTag("subject_card", 30_000)
+        saveScreenshot("explore_filtered")
+
+        // 收起面板后看纯结果列表
+        rule.onAllNodesWithTag("filter_toggle").onFirst().performClick()
+        var collapsed = false
+        val collapseDeadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < collapseDeadline) {
+            rule.mainClock.advanceTimeBy(64)
+            if (rule.onAllNodesWithText("体裁").fetchSemanticsNodes().isEmpty()) {
+                collapsed = true
+                break
+            }
+            Thread.sleep(100)
+        }
+        assertTrue("筛选面板没有收起", collapsed)
         saveScreenshot("explore")
 
         // 进详情
@@ -103,6 +146,11 @@ class AppLaunchTest {
         waitUntilText("演职人员", 30_000)
         saveScreenshot("detail")
     }
+
+    private fun toggleText(): String = rule.onAllNodesWithTag("filter_toggle")
+        .fetchSemanticsNodes()
+        .mapNotNull { it.config.getOrNull(SemanticsProperties.Text)?.joinToString() }
+        .joinToString("|")
 
     private fun waitUntilText(text: String, timeoutMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs

@@ -8,6 +8,7 @@ import com.github.bumblebee202111.doubean.data.subject.toCreditList
 import com.github.bumblebee202111.doubean.data.subject.toPhotoList
 import com.github.bumblebee202111.doubean.data.subject.toRecommendSubject
 import com.github.bumblebee202111.doubean.data.subject.toSearchResultItem
+import com.github.bumblebee202111.doubean.model.subject.Rating
 import com.github.bumblebee202111.doubean.model.subject.SubjectType
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -112,6 +113,29 @@ class DoubanApiSmokeTest {
             .map { it.toSubject(SubjectType.TV) }
         assertTrue(tvPage.isNotEmpty())
         println("[ok] explore tv=${tvPage.size} first=${tvPage.first().title}")
+
+        // 体裁 + 评分区间 + 排序 三者叠加
+        val comedy = api.newSearchSubjects(
+            tags = "电影,喜剧",
+            sort = "T",
+            start = 0,
+            range = "8,10",
+        ).map { it.toSubject(SubjectType.MOVIE) }
+        assertTrue(comedy.isNotEmpty())
+        assertTrue(
+            "range=8,10 却返回了低分片：${comedy.map { it.title to it.rating }}",
+            comedy.all { it.rating is Rating.NonNull && (it.rating as Rating.NonNull).value >= 8f },
+        )
+        println("[ok] 电影+喜剧+8分以上+时间排序=${comedy.size} ${comedy.take(3).map { it.title }}")
+
+        val costume = api.newSearchSubjects(
+            tags = "电视剧,古装,华语",
+            sort = "S",
+            start = 0,
+            range = "7,10",
+        ).map { it.toSubject(SubjectType.TV) }
+        assertTrue(costume.isNotEmpty())
+        println("[ok] 电视剧+古装+华语+7分以上=${costume.size} ${costume.take(3).map { it.title }}")
 
         val tags = api.getTags("movie")
         assertTrue(tags.isNotEmpty())
