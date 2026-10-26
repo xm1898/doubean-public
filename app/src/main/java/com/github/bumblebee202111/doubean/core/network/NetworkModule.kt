@@ -11,12 +11,22 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
 import io.ktor.client.plugins.cookies.CookiesStorage
+import io.ktor.client.plugins.cookies.HttpCookies
 import io.ktor.client.plugins.cookies.addCookie
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.header
 import io.ktor.http.Cookie
+import io.ktor.http.HttpHeaders
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import javax.inject.Singleton
 
@@ -32,13 +42,51 @@ class NetworkModule {
         AcceptAllCookiesStorage().apply {
             coroutineScope.launch {
                 addCookie(
-                    "https:
+                    "https://www.douban.com",
+                    Cookie(
                         name = "apiKey",
                         value = DOUBAN_API_KEY
                     )
                 )
             }
         }
+
+    @Provides
+    @Singleton
+    fun provideJson(): Json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+        explicitNulls = false
+        encodeDefaults = false
+    }
+
+    @Provides
+    @Singleton
+    fun provideHttpClient(
+        cookiesStorage: CookiesStorage,
+        json: Json,
+        appAndDeviceInfoProvider: AppAndDeviceInfoProvider,
+    ): HttpClient = HttpClient(OkHttp) {
+        expectSuccess = true
+
+        install(ContentNegotiation) {
+            json(json)
+        }
+        install(HttpCookies) {
+            storage = cookiesStorage
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000
+            connectTimeoutMillis = 10_000
+            socketTimeoutMillis = 15_000
+        }
+        defaultRequest {
+            header(HttpHeaders.UserAgent, appAndDeviceInfoProvider.getUserAgent())
+            header(HttpHeaders.Accept, "application/json, text/plain, */*")
+            header(HttpHeaders.AcceptLanguage, "zh-CN,zh;q=0.9")
+        }
+    }
 
     @Provides
     @Singleton

@@ -1,204 +1,78 @@
-doubean
-=======
+doubean · 书影音精简版
+====================
 
-An unofficial [Douban][douban] app for browsing [Groups][douban-groups] and exploring Subjects (
-Books/Movies/Music/TVs)
-([豆瓣][douban]非官方app，支持[小组][douban-groups]浏览和书影音探索)
+一个 [豆瓣][douban] 非官方客户端（Jetpack Compose），本仓库是
+[Bumblebee202111/doubean-public][upstream] 的 fork，被裁剪成**只做电影 / 电视浏览**的极简版本。
 
-**Disclaimer:** This is a continuously evolving project focused on core features using Jetpack
-Compose. Some features are works in progress (WIP), and you may encounter bugs.
+界面只有一层：**书影音**。没有小组、没有动态、没有登录、没有个人中心、没有设置。
+
+## 这一版做了什么
+
+- **只保留书影音一个界面**，其它页面（小组 / 动态 / 个人中心 / 登录 / 设置 / 我的收藏 / 评论）连代码一起删除
+- **去掉底部导航栏**、去掉顶部的读书 / 音乐 tab、去掉左上角头像按钮
+- **电影 / 电视两个按钮与搜索图标并排**放在顶部栏右侧，点一下切换内容
+- 首页内容区是圆形入口 + 分区卡片流：
+  - 电影：正在上映 / 即将上映 / 豆瓣 Top 250
+  - 电视：近期热门 / 国产剧 / 美剧 / 韩剧 / 日剧 / 动画
+- **加入豆瓣的「找电影 / 找电视」**：按类型 / 地区 / 年份 / 排序筛选，三列海报流、滚动分页
+- 影片详情页**只读**：海报、标题、评分、国家 / 类型 / 上映时间 / 片长、简介、演职人员、剧照、相关推荐
+- 搜索页：输入即出建议（350ms 防抖），按电影 / 电视过滤
+
+## 数据来源
+
+直接用豆瓣公开的 Web / rexxar 接口，不需要登录态、不需要 apikey：
+
+| 用途 | 接口 |
+| --- | --- |
+| 首页合集 | `m.douban.com/rexxar/api/v2/subject_collection/{movie_showing,movie_soon,movie_top250,tv_hot,tv_domestic,tv_american,tv_korean,tv_japanese,tv_animation}/items` |
+| 影片详情 | `m.douban.com/rexxar/api/v2/{movie,tv}/{id}` |
+| 演职人员 / 剧照 / 相关推荐 | `.../{id}/credits`、`.../{id}/photos`、`.../{id}/recommendations` |
+| 榜单 | `movie.douban.com/j/chart/top_list` |
+| 找片筛选 | `movie.douban.com/j/new_search_subjects` |
+| 搜索建议 | `movie.douban.com/j/subject_suggest` |
+
+rexxar 接口必须带 `Referer: https://m.douban.com/movie/`（电视用 `/tv/`），否则返回 403。
+
+## 结构
+
+```
+core/network/           Ktor 客户端、Cookie（注入 apiKey）、DTO
+core/network/api/       DoubanApiService：所有豆瓣接口
+data/subject/           SubjectRepository（数据装配）+ SubjectMappers（DTO → 领域模型）
+feature/subjects/       书影音首页
+feature/explore/        找电影 / 找电视（筛选 + 分页）
+feature/detail/         影片详情（只读）
+feature/search/         搜索
+feature/chart/          榜单
+ui/                     DoubeanApp（手写返回栈）、通用组件
+```
+
+## 构建
+
+需要 JDK 21（JDK 26 的 `jlink` 处理不了 `android-37` 的 `core-for-system-modules.jar`）与 Android SDK
+（`compileSdk = 37`，即 `platforms;android-37.0`）。
+
+```bash
+# local.properties
+sdk.dir=/path/to/android-sdk
+
+./gradlew :app:assembleDebug      # 产物 app/build/outputs/apk/debug/
+./gradlew :app:testDebugUnitTest  # 网络冒烟 + Robolectric 界面测试（会把截图落到 app/build/screenshots/）
+```
+
+测试覆盖：真实豆瓣接口取数（首页 9 个合集 / 详情 / 演职人员 / 剧照 / 榜单 / 筛选 / 搜索建议）、
+首页渲染断言（有「电影」「电视」，没有「读书」「音乐」「小组」）、首页 → 找电影 → 详情 的导航链路。
+
+## 已知限制
+
+- 只读：没有「想看 / 看过 / 评分 / 短评」等需要登录态的操作
+- 豆瓣接口是公开 Web 接口，字段与可用性由豆瓣决定，可能随时变化
+- 没有离线缓存
+
+## 致谢与许可
+
+界面组件与领域模型来自上游 [Bumblebee202111/doubean-public][upstream]，遵循其
+[LICENSE](LICENSE)。豆瓣名称、内容与接口归豆瓣所有，本项目与豆瓣官方无关。
 
 [douban]: https://www.douban.com/
-[douban-groups]: https://www.douban.com/group/
-
-## Features
-
-- Subjects (Books/Movies/Music/TVs):
-  - Home feed with personal statuses, subject unions, and rank lists
-  - View subject interests
-  - Search for subjects across all supported media types
-  - View subject details, including metadata, intros, song lists (for music), and user interactions
-  - Browse rank lists
-- Groups:
-  - Browse my groups and topics
-  - Explore group details, topics, and comments
-  - Search for groups
-  - Enhancements:
-    - Pin group tabs locally for quick access
-    - Sort topics within each page by create time or default order
-    - Customizable topic notifications
-- Doulists:
-  - View Doulists and their items (topics, subjects, reviews)
-  - Collect subjects and topics into Doulists
-  - My Doulists: Collected items + Doulists
-- General:
-  - Ad-free and lightweight (~3MB)
-  - Customizable bottom navigation (hide tabs & set startup tab)
-  - Password login support & session reuse (advanced, root required for auto-import)
-  - Partial deep linking
-  - Direct official API calls
-  - Basic Material Design 3 (MD3) theming
-  - Basic image viewer
-  - User profile screen
-  - View statuses feed (home timeline)
-  - Mobile-optimized pure Web screens (legacy)
-
-## Screenshots
-
-<img src="screenshots/phone_subjects.png" alt="phone_subjects" height="300" /> <img src="screenshots/phone_groups_home.png" alt="phone_groups" height="300" /> <img src="screenshots/phone_group_detail.png" alt="phone_group_detail" height="300" /> <img src="screenshots/phone_topic.png" alt="phone_topic" height="300" /> <img src="screenshots/phone_doulist.png" alt="phone_doulist" height="300" />
-<br>
-<img src="screenshots/tablet_movie.png" alt="tablet_movie" height="400" /> <img src="screenshots/tablet_interests.png" alt="tablet_interests" height="400" />
-
-## Getting Started
-
-- Download the [latest release][latest-release]
-- Requires Android 8.1+
-- Feel free to [file issues](https://github.com/Bumblebee202111/doubean-public/issues)
-- Keep the official app installed: Recommended for full platform functionality
-
-[latest-release]: https://github.com/Bumblebee202111/doubean-public/releases/latest
-
-## Important Notices
-
-### Source Code Status
-
-This repository contains a curated subset of code from a private project. It is automatically synced using [Copybara](https://github.com/google/copybara) to filter files, scrub sensitive information, and preserve the original commit history.
-
-### Guidelines
-
-- Intended for personal learning & exploration
-- Please avoid widespread promotion
-
-## Tech Stack
-
-- [Foundation][foundation]: [Android KTX][android-ktx]
-- [Architecture][arch]: [Lifecycles][lifecycle], [Navigation 3][navigation-3], [Paging][paging], [Room][room],
-  DataStore, [ViewModel][viewmodel], [WorkManager][workmanager]
-- [UI][ui]: Jetpack Compose
-- Behavior: [Notifications][notifications]
-- Third-party libraries: [Kotlin Coroutines][kotlin-coroutines], Kotlinx Serialization, Ktor, Coil,
-  libsu, Accompanist Permissions/WebView
-
-[foundation]: https://developer.android.com/jetpack/components
-[android-ktx]: https://developer.android.com/kotlin/ktx
-[arch]: https://developer.android.com/jetpack/arch/
-[lifecycle]: https://developer.android.com/topic/libraries/architecture/lifecycle
-
-[navigation-3]: https://developer.android.com/guide/navigation/navigation-3
-[paging]: https://developer.android.com/topic/libraries/architecture/paging/v3-overview
-[room]: https://developer.android.com/topic/libraries/architecture/room
-[viewmodel]: https://developer.android.com/topic/libraries/architecture/viewmodel
-[workmanager]: https://developer.android.com/topic/libraries/architecture/workmanager
-[ui]: https://developer.android.com/guide/topics/ui
-[notifications]: https://developer.android.com/develop/ui/views/notifications
-[kotlin-coroutines]: https://kotlinlang.org/docs/reference/coroutines-overview.html
-
-## Roadmap
-
-Upcoming features, bug fixes, libraries, and environment changes (roughly in chronological order).
-Primarily for personal tracking.
-
-### Current Release (0.13.2)
-
--
-
-### Next Release (0.13.3)
-
-<details>
-<summary>Future Plans (Click to expand)</summary>
-
-- Navigation
-  - Shared element transitions for images
-- Add error message mappings to match official
-- Groups 
-  - Interactions
-    - Pin my groups
-    - Official-style list item actions
-  - Simplify topic caching
-  - Search:
-    - Topics within a group/tab
-    - Global topic search
-    - Tabbed search results
-  - New web-based feed for *all* followed topics
-    - Toggleable "My Group Topics" section on the home screen
-      - Currently use tagged but incomplete recent topics via API
-    - Sort by creation time or "Hotness" (replies + 1 / time)
-    - Notification engine with customizable intervals (15m, 30m, 1h)
-    - Per-group settings for sort preference and check depth (with a UI hint suggesting small values for active groups)
-  - Home: Potential pagination for recommended topics
-  - Tab
-    - Track topic read status
-    - Dynamic topic sorting options
-  - Group Detail
-    - Auto-collapse header for subscribed/pinned groups/tabs
-    - Fix messy color system
-    - "Open in Douban to Comment" FAB
-  - Topic:
-    - Render content using *dynamic* HTML/WebView
-  - Default hide officially-flagged "unfriendly" content
-  - Implement content blocking
-  - Reddit-style list item expand/collapse
-- Subjects
-  - Subject Detail
-    - Ratings histogram
-    - Friends' Interests/Reviews: View interests/reviews from followed
-      users ([#26](https://github.com/Bumblebee202111/doubean-public/issues/26))
-  - Review: Render content using the same HTML/WebView approach as topics
-  - Color schemes
-  - More
-- UserProfile: My groups
-- i18n
-  - Language selection
-  - AI translation support
-- Doulists
-  - Edit/remove posts
-  - Follow Doulists
-  - List/post pagination
-- Search suggestions
-- Login: Code-based (without password)
-- Shortcuts
-- NetworkManager
-- Widgets: Calendar today
-- QR
-- (Rooted users) Optional sync of more existing preferences for API request consistency
-
-#### Ongoing Improvements
-
-- Ensure basic dark mode, landscape & tablet support
-- Sync more source to public repo
-- Full deep linking support
-- Improve model layering
-- i18n: Translations
-- Test
-
-</details>
-
-## References
-
-- Official and unofficial sample apps
-- [Developer Guides][guides]
-- [Material Design][material]
-- Various social apps (UI/UX inspiration)
-
-[guides]: https://developer.android.google.cn/guide
-[material]: https://material.io/
-
-## Utilities
-
-- [HTTPCanary][http-canary] for analyzing API
-- [jadx][jadx]-gui for model understanding
-- [Google Chrome][google-chrome] for debugging CSS
-
-[http-canary]: https://github.com/MegatronKing/HttpCanary/
-[jadx]: https://github.com/skylot/jadx/releases
-[google-chrome]: https://www.google.com/chrome/
-
-## Support
-
-If you find this project helpful and wish to support its development, you can treat me to a coffee via WeChat Pay:
-
-<img src="assets/wechat_donate_qr.png" alt="WeChat Donate QR Code" width="200"/>
-
-## License
-
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for the full license text.
+[upstream]: https://github.com/Bumblebee202111/doubean-public

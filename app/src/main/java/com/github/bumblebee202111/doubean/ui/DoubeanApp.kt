@@ -1,106 +1,60 @@
 package com.github.bumblebee202111.doubean.ui
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.navigation3.runtime.NavKey
-import com.github.bumblebee202111.doubean.feature.groups.groupdetail.navigation.GroupDetailNavKey
-import com.github.bumblebee202111.doubean.feature.groups.resharestatuses.navigation.ReshareStatusesNavKey
-import com.github.bumblebee202111.doubean.feature.groups.topic.navigation.TopicNavKey
-import com.github.bumblebee202111.doubean.feature.userprofile.navigation.UserProfileNavKey
-import com.github.bumblebee202111.doubean.model.user.User
-import com.github.bumblebee202111.doubean.navigation.Navigator
-import com.github.bumblebee202111.doubean.navigation.TopLevelDestination
-import com.github.bumblebee202111.doubean.navigation.rememberNavigationState
-import com.github.bumblebee202111.doubean.ui.common.ApplyStatusBarIconAppearance
-import com.github.bumblebee202111.doubean.ui.common.SnackbarManager
+import androidx.compose.runtime.setValue
+import com.github.bumblebee202111.doubean.feature.chart.ChartScreen
+import com.github.bumblebee202111.doubean.feature.detail.DetailScreen
+import com.github.bumblebee202111.doubean.feature.explore.ExploreScreen
+import com.github.bumblebee202111.doubean.feature.search.SearchScreen
+import com.github.bumblebee202111.doubean.feature.subjects.SubjectsScreen
+import com.github.bumblebee202111.doubean.navigation.Screen
 
+/**
+ * 极简导航：只有书影音一条线（首页 → 找片 / 榜单 / 搜索 → 详情）。
+ */
 @Composable
-fun DoubeanApp(
-    snackbarManager: SnackbarManager,
-    startRoute: NavKey,
-    topLevelDestinations: List<TopLevelDestination>,
-    currentUser: User?,
-    pendingDeepLinkKey: NavKey? = null,
-    onDeepLinkConsumed: () -> Unit = {},
-) {
-    val snackbarHostState = remember { SnackbarHostState() }
+fun DoubeanApp() {
+    var backStack by remember { mutableStateOf<List<Screen>>(listOf(Screen.Subjects)) }
 
-    val topLevelRoutes = remember(topLevelDestinations) {
-        topLevelDestinations.map { it.route as NavKey }.toSet()
-    }
+    val push: (Screen) -> Unit = { screen -> backStack = backStack + screen }
+    val pop: () -> Unit = { if (backStack.size > 1) backStack = backStack.dropLast(1) }
 
-    val navigationState = rememberNavigationState(
-        startRoute = startRoute,
-        topLevelRoutes = topLevelRoutes
-    )
+    BackHandler(enabled = backStack.size > 1) { pop() }
 
-    val navigator = remember { Navigator(navigationState) }
-
-    val currentKey by remember {
-        derivedStateOf {
-            val currentStack = navigationState.backStacks[navigationState.topLevelRoute]
-            currentStack?.lastOrNull() ?: navigationState.topLevelRoute
-        }
-    }
-
-    val useLightIcons = remember(currentKey) {
-        val needsLightIcons = currentKey is GroupDetailNavKey ||
-                currentKey is TopicNavKey ||
-                currentKey is ReshareStatusesNavKey ||
-                currentKey is UserProfileNavKey
-
-        if (needsLightIcons) true else null
-    }
-
-    ApplyStatusBarIconAppearance(useLightIcons = useLightIcons)
-
-    val currentMessage by snackbarManager.currentMessage.collectAsStateWithLifecycle()
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    val messageToDisplay = currentMessage?.getString()
-    LaunchedEffect(currentMessage, snackbarHostState, lifecycleOwner) {
-        if (currentMessage != null && messageToDisplay != null) {
-            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                val result = snackbarHostState.showSnackbar(message = messageToDisplay)
-                if (result == SnackbarResult.Dismissed && snackbarManager.currentMessage.value == currentMessage) {
-                    snackbarManager.messageShown()
-                }
-            }
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        MainNavScreen(
-            navigationState = navigationState,
-            navigator = navigator,
-            topLevelDestinations = topLevelDestinations,
-            topLevelRoutes = topLevelRoutes,
-            pendingDeepLinkKey = pendingDeepLinkKey,
-            onDeepLinkConsumed = onDeepLinkConsumed,
-            currentUser = currentUser,
-            modifier = Modifier.fillMaxSize()
+    when (val screen = backStack.last()) {
+        is Screen.Subjects -> SubjectsScreen(
+            onOpenExplore = { push(Screen.Explore(it)) },
+            onOpenChart = { push(Screen.Chart(it)) },
+            onOpenSearch = { push(Screen.Search) },
+            onOpenDetail = { id, type -> push(Screen.Detail(id, type)) },
         )
 
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .systemBarsPadding()
+        is Screen.Explore -> ExploreScreen(
+            type = screen.type,
+            onBack = pop,
+            onOpenDetail = { id, type -> push(Screen.Detail(id, type)) },
+        )
+
+        is Screen.Chart -> ChartScreen(
+            type = screen.type,
+            onBack = pop,
+            onOpenDetail = { id, type -> push(Screen.Detail(id, type)) },
+        )
+
+        is Screen.Detail -> DetailScreen(
+            id = screen.id,
+            type = screen.type,
+            onBack = pop,
+            onOpenDetail = { id, type -> push(Screen.Detail(id, type)) },
+        )
+
+        is Screen.Search -> SearchScreen(
+            onBack = pop,
+            onOpenDetail = { id, type -> push(Screen.Detail(id, type)) },
         )
     }
 }

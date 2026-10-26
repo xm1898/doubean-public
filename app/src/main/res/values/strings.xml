@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">豆荚</string>
+
+    <!-- 通用 -->
+    <string name="ok">好</string>
+    <string name="more">更多</string>
+    <string name="retry">重试</string>
+    <string name="loading">加载中…</string>
+    <string name="all">全部</string>
+    <string name="edit">编辑</string>
+    <string name="share">分享</string>
+    <string name="topic">话题</string>
+    <string name="joined">已加入</string>
+    <string name="subscribe">订阅</string>
+    <string name="subscribed">已订阅</string>
+    <string name="expand">展开</string>
+    <string name="collapse">收起</string>
+    <string name="movie">电影</string>
+    <string name="tv">电视剧</string>
+    <string name="book">读书</string>
+    <string name="music">音乐</string>
+    <string name="colon">：</string>
+    <string name="middle_dot">·</string>
+    <string name="repliedTo">回复</string>
+    <string name="label_path">路径</string>
+    <string name="label_format">格式</string>
+    <string name="more_info">更多信息</string>
+    <string name="view_in">在以下位置查看</string>
+    <string name="view_in_web">在网页中查看</string>
+    <string name="view_in_browser">在浏览器中查看</string>
+    <string name="view_in_douban">在豆瓣中查看</string>
+    <string name="unsupported_content_label">不支持的内容</string>
+    <string name="unsupported_content_more_info">暂不支持此类内容</string>
+
+    <!-- 动作 -->
+    <string name="action_ok">确定</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_save">保存</string>
+    <string name="action_mark_movie">标记电影</string>
+    <string name="action_mark_tv">标记电视剧</string>
+    <string name="action_mark_book">标记图书</string>
+    <string name="action_mark_music">标记音乐</string>
+
+    <!-- 标签页 / 导航 -->
+    <string name="title_subjects">书影音</string>
+    <string name="title_movies">电影</string>
+    <string name="title_tvs">电视剧</string>
+    <string name="title_books">读书</string>
+    <string name="title_music">音乐</string>
+    <string name="title_movie">电影</string>
+    <string name="title_tv">电视剧</string>
+    <string name="title_book">图书</string>
+    <string name="title_me">我的</string>
+    <string name="title_groups">小组</string>
+    <string name="title_statuses">动态</string>
+    <string name="title_notifications">通知</string>
+    <string name="title_settings">设置</string>
+    <string name="settings">设置</string>
+    <string name="title_login">登录</string>
+    <string name="title_unlogin">未登录</string>
+    <string name="title_my_subject">我的书影音</string>
+    <string name="title_my_topics">我的话题</string>
+    <string name="title_my_groups">我的小组</string>
+    <string name="title_dou_list">豆列</string>
+    <string name="title_created_doulist">创建的豆列</string>
+    <string name="title_slide_menu_collect">我的收藏</string>
+    <string name="title_subject_rank_list">豆瓣榜单</string>
+    <string name="title_subject_rank_lists">豆瓣榜单</string>
+    <string name="title_day_ranking">今日排行</string>
+    <string name="title_hitmap">热力图</string>
+    <string name="title_pinned_items">置顶条目</string>
+    <string name="title_reshare_statuses">转发动态</string>
+    <string name="title_review_movie">影评</string>
+    <string name="title_review_tv">剧评</string>
+    <string name="title_review_book">书评</string>
+    <string name="title_review_music">乐评</string>
+    <string name="title_book_all_versions">全部版本</string>
+    <string name="title_book_item_type">图书</string>
+    <string name="title_music_item_type">音乐</string>
+    <string name="title_tv_movie_item_type">影视</string>
+    <string name="title_collect_to_doulist">收藏到豆列</string>
+    <string name="title_my_collection_dou_list_new">新建收藏豆列</string>
+    <string name="title_my_following_dou_list_new">新建关注豆列</string>
+    <string name="title_account_and_session">账号与登录状态</string>
+    <string name="title_pinned">已置顶</string>
+    <string name="title_unpinned">未置顶</string>
+    <string name="title_year">年份</string>
+    <string name="subject_title_year">%1$s（%2$s）</string>
+
+    <!-- 顶部 tabs 配置 -->
+    <string name="about_header">关于</string>
+    <string name="about_contribution">贡献</string>
+    <string name="about_pinned_tabs">置顶标签页</string>
+    <string name="app_author">Bumblebee</string>
+    <string name="app_author_title">作者</string>
+    <string name="app_version_title">版本</string>
+    <string name="pin_tab">置顶</string>
+    <string name="unpin_tab">取消置顶</string>
+    <string name="pin_tab_tooltip">置顶标签页</string>
+    <string name="tab_pinned">已置顶</string>
+    <string name="tab_unpinned">未置顶</string>
+    <string name="pref_cat_title_notifications">通知</string>
+    <string name="pref_title_navigation">导航</string>
+    <string name="pref_title_startup_tab">启动页</string>
+    <string name="pref_title_visible_tabs">显示的标签页</string>
+    <string name="pref_summary_visible_tabs_count">已选择</string>
+    <string name="tab_notification_preferences">通知偏好</string>
+
+    <!-- 登录 -->
+    <string name="login_button">登录</string>
+    <string name="login_prompt_mark_subject">登录后可标记</string>
+    <string name="login_phone_label">手机号</string>
+    <string name="login_password_label">密码</string>
+    <string name="login_phone_password_title">手机号密码登录</string>
+    <string name="login_final_reminder">登录信息仅保存在本机</string>
+    <string name="login_session_import_title">导入豆瓣登录状态</string>
+    <string name="login_session_import_note">从豆瓣客户端导入</string>
+    <string name="login_session_import_auto_button">自动导入</string>
+    <string name="login_session_import_manual_button">手动导入</string>
+    <string name="login_session_import_manual_note">手动填写</string>
+    <string name="login_session_import_textfield_label">Cookie</string>
+    <string name="need_login_hint">需要先登录</string>
+    <string name="verify_phone_title">验证手机号</string>
+    <string name="verify_phone_code_label">验证码</string>
+    <string name="verify_phone_request_code_button">获取验证码</string>
+    <string name="verify_phone_verify_button">验证</string>
+    <string name="settings_logout_button">退出登录</string>
+    <string name="settings_open_login_screen">打开登录页</string>
+    <string name="settings_auto_import_title">自动导入登录状态</string>
+    <string name="settings_auto_import_summary">启动时自动导入</string>
+
+    <!-- 错误 -->
+    <string name="error_network">网络错误</string>
+    <string name="error_server">服务器错误</string>
+    <string name="error_client">请求错误</string>
+    <string name="error_unknown">未知错误</string>
+    <string name="error_loading_failed">加载失败</string>
+    <string name="error_access_token_invalid">登录已失效</string>
+    <string name="error_username_password_mismatch">账号或密码错误</string>
+    <string name="error_ban_word">含有敏感词</string>
+    <string name="error_blocked_by_user">已被对方屏蔽</string>
+    <string name="error_invalid_user">无效用户</string>
+    <string name="error_import_failed">导入失败</string>
+    <string name="error_saving_image">保存图片失败</string>
+    <string name="failed_to_load_image">图片加载失败</string>
+    <string name="image_not_found_in_cache">缓存中没有图片</string>
+    <string name="image_saved_to">图片已保存到</string>
+
+    <!-- 空状态 -->
+    <string name="empty_content_title">没有内容</string>
+    <string name="empty_search_result">没有搜索结果</string>
+    <string name="empty_notifications">没有通知</string>
+    <string name="empty_my_groups">还没有加入小组</string>
+    <string name="empty_reshare_list">没有转发</string>
+    <string name="empty_author_comments_list">没有评论</string>
+
+    <!-- 搜索 -->
+    <string name="search_subjects_hint">搜索电影、电视、图书、音乐</string>
+    <string name="search_groups_hint">搜索小组</string>
+    <string name="search_history_title">搜索历史</string>
+    <string name="search_history_clear_all">清空搜索历史</string>
+    <string name="content_description_clear_search">清空搜索</string>
+    <string name="content_description_close">关闭</string>
+    <string name="content_description_delete_search_term">删除该搜索</string>
+
+    <!-- 书影音条目 -->
+    <string name="subject_module_title_intro">简介</string>
+    <string name="subject_module_title_celebrities">演职员</string>
+    <string name="subject_module_title_trailers">预告片</string>
+    <string name="subject_module_title_interests">短评</string>
+    <string name="subject_item_title_music_album_items">曲目</string>
+    <string name="book_series_total_count">共</string>
+    <string name="unit_for_movie">分钟</string>
+    <string name="unit_for_music">首</string>
+    <string name="unit_for_book">页</string>
+    <string name="unit_for_generic_subject">条</string>
+    <string name="rating_zero">暂无评分</string>
+    <string name="rate_subject_title">给这部作品打分</string>
+    <string name="my_rating_label">我的评分</string>
+    <string name="play_trailer">播放预告片</string>
+    <string name="movie_vendor_entrance_title">在线观看</string>
+    <string name="tv_vendor_entrance_title">在线观看</string>
+    <string name="like_recommend">喜欢这部作品的人也喜欢</string>
+
+    <!-- 标记状态 -->
+    <string name="status_mark_movie">想看</string>
+    <string name="status_mark_tv">想看</string>
+    <string name="status_mark_book">想读</string>
+    <string name="status_mark_music">想听</string>
+    <string name="status_doing_tv">在看</string>
+    <string name="status_doing_book">在读</string>
+    <string name="status_doing_music">在听</string>
+    <string name="status_done_movie">看过</string>
+    <string name="status_done_tv">看过</string>
+    <string name="status_done_book">读过</string>
+    <string name="status_done_music">听过</string>
+    <string name="status_action_mark_movie">标记为想看</string>
+    <string name="status_action_mark_tv">标记为想看</string>
+    <string name="status_action_mark_book">标记为想读</string>
+    <string name="status_action_mark_music">标记为想听</string>
+    <string name="status_action_doing_tv">标记为在看</string>
+    <string name="status_action_doing_book">标记为在读</string>
+    <string name="status_action_doing_music">标记为在听</string>
+    <string name="status_action_done_movie">标记为看过</string>
+    <string name="status_action_done_tv">标记为看过</string>
+    <string name="status_action_done_book">标记为读过</string>
+    <string name="status_action_done_music">标记为听过</string>
+    <string name="status_action_unmark">取消标记</string>
+
+    <!-- 评论 / 互动 -->
+    <string name="all_comments">全部评论</string>
+    <string name="top_comments">热门评论</string>
+    <string name="ugc_comments">条评论</string>
+    <string name="ugc_like">人喜欢</string>
+    <string name="ugc_like_review">人有用</string>
+    <string name="ugc_reshares">次转发</string>
+    <string name="jump_to_comment">跳到评论</string>
+    <string name="interest_sort_default">默认</string>
+    <string name="interest_sort_hot">最热</string>
+    <string name="sort_by_title">排序</string>
+    <string name="sort_topics_by_hot">按热度排序</string>
+    <string name="sort_topics_by_new">按时间排序</string>
+    <string name="sort_topics_by_hot_last_created">热度优先</string>
+    <string name="sort_topics_by_new_last_created">时间优先</string>
+    <string name="sort_topics_info_title">排序说明</string>
+    <string name="sort_topics_info_body">按热度或时间排序话题</string>
+    <string name="author_only_mode">只看楼主</string>
+    <string name="content_edited">已编辑</string>
+
+    <!-- 豆列 -->
+    <string name="create_doulist">创建豆列</string>
+    <string name="activity_edit_doulist_title">编辑豆列</string>
+    <string name="doulist_name_hint">豆列名称</string>
+    <string name="doulist_name_cannot_empty">豆列名称不能为空</string>
+    <string name="doulist_name_cannot_more">豆列名称过长</string>
+    <string name="doulist_content_count">条内容</string>
+    <string name="doulist_item_count_info">条目数</string>
+    <string name="doulist_item_count_simple_info">条</string>
+    <string name="doulist_book_label">图书</string>
+    <string name="doulist_movie_label">电影</string>
+    <string name="doulist_podcast_label">播客</string>
+    <string name="dou_list_follow_count">人关注</string>
+    <string name="collect_time_new">最新收藏</string>
+    <string name="date_time_yesterday_time">昨天</string>
+
+    <!-- 小组 -->
+    <string name="group_description_title">小组简介</string>
+    <string name="group_notifications_header">小组通知</string>
+    <string name="group_notification_preferences">小组通知偏好</string>
+    <string name="group_default_notification_preferences_settings_title">默认通知偏好</string>
+    <string name="enable_notifications_title">开启通知</string>
+    <string name="enable_topic_notifications_title">开启话题通知</string>
+    <string name="notifications_info_title">通知说明</string>
+    <string name="notifications_info_body">有新回复时通知你</string>
+    <string name="notify_on_updates_title">更新时通知</string>
+    <string name="notification_permission_granted">已获得通知权限</string>
+    <string name="notification_permission_tip">需要通知权限</string>
+    <string name="max_topic_notifications_per_fetch_title">每次拉取上限</string>
+    <string name="topic_notification_channel_name">话题通知</string>
+    <string name="topic_notification_channel_description">话题有新回复时提醒</string>
+    <string name="topic_notification_group_summary">话题通知分组</string>
+    <string name="a11y_group_item_image">小组封面</string>
+
+    <!-- 用户信息 -->
+    <string name="user_info_hometown">家乡</string>
+    <string name="user_info_id">ID</string>
+    <string name="user_info_ip">IP 属地</string>
+    <string name="user_info_location">所在地</string>
+    <string name="user_info_register_time">注册时间</string>
+    <string name="send_feedback_title">发送反馈</string>
+
+    <!-- 找片（新增） -->
+    <string name="explore_movie">找电影</string>
+    <string name="explore_tv">找电视</string>
+    <string name="explore_douban_rank">豆瓣榜单</string>
+    <string name="explore_showing">正在上映</string>
+    <string name="explore_upcoming">即将播出</string>
+    <string name="explore_filter_type">类型</string>
+    <string name="explore_filter_region">地区</string>
+    <string name="explore_filter_year">年代</string>
+    <string name="explore_filter_sort">排序</string>
+    <string name="explore_sort_recommend">综合排序</string>
+    <string name="explore_sort_rank">按评价排序</string>
+    <string name="explore_sort_time">按时间排序</string>
+    <string name="explore_sort_hot">按热度排序</string>
+    <string name="explore_empty">没有符合条件的结果</string>
+    <string name="music_album">专辑</string>
+</resources>

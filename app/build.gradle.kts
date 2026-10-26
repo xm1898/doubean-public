@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.room)
     alias(libs.plugins.hilt)
 }
 
@@ -44,6 +43,11 @@ android {
             isDebuggable = true
         }
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -55,18 +59,12 @@ hilt {
     
 }
 
-room {
-    schemaDirectory("$projectDir/schemas")
-}
-
 base {
     archivesName.set("doubean_${android.defaultConfig.versionName}")
 }
 
 dependencies {
 
-    implementation(libs.accompanist.permissions)
-    implementation(libs.accompanist.webview)
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
@@ -81,23 +79,11 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
-    implementation(libs.androidx.navigation3.ui)
-    implementation(libs.androidx.navigation3.runtime)
-    implementation(libs.androidx.paging)
-    implementation(libs.androidx.paging.compose)
-    implementation(libs.androidx.room.ktx)
-    implementation(libs.androidx.room.paging)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    ksp(libs.androidx.room.compiler)
-    implementation(libs.androidx.webkit)
-    implementation(libs.androidx.work.runtime.ktx)
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
@@ -120,6 +106,11 @@ dependencies {
     ksp(libs.hilt.android.compiler)
 
     testImplementation(libs.junit)
+    testImplementation(composeBom)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
 
     implementation(libs.libsu.core)
 
@@ -136,6 +127,4 @@ kotlin {
             )
         )
     }
-}
-
 }

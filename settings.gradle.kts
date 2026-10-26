@@ -10,7 +10,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https:
+        maven("https://jitpack.io")
     }
 }
 
