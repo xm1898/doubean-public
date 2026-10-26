@@ -30,8 +30,8 @@ fun RatingText(
     when (rating) {
         is Rating.NonNull -> Text(
             text = formatRating(rating.value),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
             modifier = modifier,
         )

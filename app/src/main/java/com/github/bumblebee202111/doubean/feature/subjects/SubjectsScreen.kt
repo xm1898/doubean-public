@@ -1,9 +1,7 @@
 package com.github.bumblebee202111.doubean.feature.subjects
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,7 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
@@ -25,6 +23,7 @@ import androidx.compose.material.icons.outlined.Theaters
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.github.bumblebee202111.doubean.model.subject.Subject
 import com.github.bumblebee202111.doubean.model.subject.SubjectType
 import com.github.bumblebee202111.doubean.ui.UiState
 import com.github.bumblebee202111.doubean.ui.component.EmptyBox
@@ -66,15 +64,15 @@ fun SubjectsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "书影音",
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "影音",
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
                 },
                 actions = {
                     Row(
                         modifier = Modifier.padding(end = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         TypeChip(
@@ -88,7 +86,11 @@ fun SubjectsScreen(
                             onClick = { viewModel.selectType(SubjectType.TV) },
                         )
                         IconButton(onClick = onOpenSearch) {
-                            Icon(Icons.Outlined.Search, contentDescription = "搜索")
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = "搜索",
+                                modifier = Modifier.size(22.dp),
+                            )
                         }
                     }
                 },
@@ -100,14 +102,12 @@ fun SubjectsScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
             contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item {
                 EntryRow(
                     type = selectedType,
                     onOpenExplore = { onOpenExplore(selectedType) },
                     onOpenChart = { onOpenChart(selectedType) },
-                    onOpenSearch = onOpenSearch,
                 )
             }
 
@@ -152,7 +152,12 @@ private fun TypeChip(
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(text) },
+        label = { Text(text, style = MaterialTheme.typography.labelLarge) },
+        shape = RoundedCornerShape(50),
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
     )
 }
 
@@ -162,76 +167,72 @@ private fun SectionHeader(title: String) {
         text = title,
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp),
+        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 10.dp),
     )
 }
 
+/** 首页顶部的两个快捷入口：找片 / 榜单，等宽铺满一行。 */
 @Composable
 private fun EntryRow(
     type: SubjectType,
     onOpenExplore: () -> Unit,
     onOpenChart: () -> Unit,
-    onOpenSearch: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (type == SubjectType.TV) {
-            EntryItem(
-                icon = Icons.Outlined.Tv,
-                label = "找电视",
-                onClick = onOpenExplore,
-            )
-        } else {
-            EntryItem(
-                icon = Icons.Outlined.Theaters,
-                label = "找电影",
-                onClick = onOpenExplore,
-            )
-        }
-        EntryItem(
+        QuickAction(
+            icon = if (type == SubjectType.TV) Icons.Outlined.Tv else Icons.Outlined.Theaters,
+            label = if (type == SubjectType.TV) "找电视" else "找电影",
+            onClick = onOpenExplore,
+            modifier = Modifier.weight(1f),
+        )
+        QuickAction(
             icon = Icons.Outlined.Star,
             label = "豆瓣榜单",
             onClick = onOpenChart,
-        )
-        EntryItem(
-            icon = Icons.Outlined.Search,
-            label = "搜索",
-            onClick = onOpenSearch,
+            modifier = Modifier.weight(1f),
         )
     }
 }
 
 @Composable
-private fun EntryItem(
+private fun QuickAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(88.dp)
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = modifier
+            .height(46.dp)
+            .clickable(onClick = onClick),
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            modifier = Modifier.size(56.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+            )
         }
-        Spacer(Modifier.height(6.dp))
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
     }
 }
