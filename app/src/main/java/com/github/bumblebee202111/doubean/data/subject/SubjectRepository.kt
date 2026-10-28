@@ -1,6 +1,5 @@
 package com.github.bumblebee202111.doubean.data.subject
 
-import com.github.bumblebee202111.doubean.core.network.DoubanThrottledException
 import com.github.bumblebee202111.doubean.core.network.api.DoubanApiService
 import com.github.bumblebee202111.doubean.model.ApiError
 import com.github.bumblebee202111.doubean.model.AppError
@@ -145,14 +144,13 @@ class SubjectRepository @Inject constructor(
         start: Int = 0,
         range: String = "0,10",
         type: SubjectType = SubjectType.MOVIE,
-        yearHint: String? = null,
     ): AppResult<List<Subject>> = call {
         api.newSearchSubjects(
             tags = tags.filter { it.isNotBlank() }.joinToString(","),
             sort = sort,
             start = start,
             range = range,
-        ).map { it.toSubject(type, yearHint) }
+        ).map { it.toSubject(type) }
     }
 
     suspend fun suggest(query: String, type: SubjectType): AppResult<List<SearchResultSubjectItem>> =
@@ -160,23 +158,6 @@ class SubjectRepository @Inject constructor(
             if (query.isBlank()) return@call emptyList()
             api.suggest(query).map { it.toSearchResultItem(type) }
         }
-
-    /**
-     * 官方「选电影 / 选剧集」信息流。`sort=R` 是按首映时间，这才是真·时间排序；
-     * `tags` 管体裁/地区/年份，`scoreRange` 管评分区间，都是服务端过滤。
-     */
-    suspend fun premiereFeed(
-        type: SubjectType,
-        sort: String,
-        start: Int,
-        count: Int,
-        tags: String? = null,
-        scoreRange: String = "0,10",
-    ): AppResult<List<Subject>> = call {
-        api.recommendFeed(type.apiValue(), sort, start, count, tags, scoreRange)
-            .items
-            .mapNotNull { it.toFeedSubject(type) }
-    }
 
     /* ----------------------------- 工具 ----------------------------- */
 
@@ -192,17 +173,6 @@ class SubjectRepository @Inject constructor(
                     code = e.response.status.value,
                     message = e.message,
                     request = e.response.call.request.url.toString(),
-                    solutionUri = null,
-                    originalError = e,
-                )
-            )
-        } catch (e: DoubanThrottledException) {
-            AppResult.Error(
-                ApiError(
-                    status = 429,
-                    code = 429,
-                    message = "豆瓣限制访问频率了，歇一会儿再试",
-                    request = "",
                     solutionUri = null,
                     originalError = e,
                 )

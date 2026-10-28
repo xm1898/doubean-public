@@ -16,16 +16,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * 找电影 / 找电视的排序方式，取值就是官方「选电影 / 选剧集」页信息流自己列的 sorts：
- * `[{"综合排序":"T"},{"近期热度":"U"},{"首映时间":"R"},{"高分优先":"S"}]`。
- *
- * 注意「综合」是 T 不是 U —— U 是「近期热度」。
- */
+/** 找电影 / 找电视的排序方式。 */
 enum class ExploreSort(val label: String, val apiValue: String) {
-    RECOMMEND("综合", "T"),
+    RECOMMEND("综合", "U"),
     RANK("评分", "S"),
-    TIME("时间", "R"),
+    TIME("时间", "T"),
 }
 
 data class ExploreFilters(
@@ -44,11 +39,6 @@ data class ExploreFilters(
         get() = activeCount == 0 && sort == ExploreSort.RECOMMEND
 }
 
-/**
- * 找片页的数据源统一走 `rexxar/api/v2/{movie,tv}/recommend`：
- * 它同时支持 `tags`（体裁/地区/年份）、`score_range`（评分区间）和 `sort`（含首映时间），
- * 三项都由服务端过滤，翻页不会再出现「本地筛空导致白屏」。
- */
 @HiltViewModel
 class ExploreViewModel @Inject constructor(
     private val repository: SubjectRepository,
@@ -70,20 +60,8 @@ class ExploreViewModel @Inject constructor(
     val exhausted: StateFlow<Boolean> = _exhausted.asStateFlow()
 
     private var started = false
+    private var start = 0
     private var job: Job? = null
-    private var loadMoreJob: Job? = null
-
-    /**
-     * 数据代次。每次 reload 自增；loadMore 在协程里发现代次变了就直接丢弃结果，
-     * 否则「改筛选 → 旧的一页追加回来」会把新旧两批数据混在一起，出现重复 id 撞 key 崩溃。
-     */
-    private var generation = 0
-
-    /** 信息流的翻页游标。 */
-    private var offset = 0
-
-    /** 已经展示过的 id，避免同一部片子在两页里重复出现把列表撑出重复 key。 */
-    private val seen = mutableSetOf<String>()
 
     fun start(type: SubjectType) {
         if (started && _type.value == type) return
@@ -99,7 +77,6 @@ class ExploreViewModel @Inject constructor(
     fun setCategory(category: String) {
         if (_filters.value.category == category) return
         _filters.value = _filters.value.copy(category = category, genre = "全部")
-        _type.value = if (category == "电影") SubjectType.MOVIE else SubjectType.TV
         reload()
     }
 
@@ -133,81 +110,56 @@ class ExploreViewModel @Inject constructor(
 
     fun reload() {
         job?.cancel()
-        loadMoreJob?.cancel()
-        generation++
-        offset = 0
-        seen.clear()
+        start = 0
         _exhausted.value = false
-        _loadingMore.value = false
-        val filters = _filters.value
         job = viewModelScope.launch {
             _items.value = UiState.Loading
-            when (val result = fetch(filters, start = 0)) {
-                is AppResult.Error -> _items.value = result.toUiState()
-                is AppResult.Success -> {
-                    // 同一页内部也可能重复（榜单卡、推荐位会撞），先在页内去一次重，
-                    // 否则 LazyVerticalGrid 拿到两个一样的 key 会直接抛异常闪退。
-                    val page = result.data.distinctBy { it.id }
-                    seen += page.map { it.id }
-                    _items.value = UiState.Success(page)
-                    if (result.data.size < PAGE_SIZE) _exhausted.value = true
-                    offset = PAGE_SIZE
-                }
-            }
+            val filters = _filters.value
+            val result = repository.explore(
+                tags = buildTags(filters),
+                sort = filters.sort.apiValue,
+                start = 0,
+                range = ratingRange(filters.rating),
+                type = _type.value,
+            )
+            _items.value = result.toUiState()
+            start = PAGE_SIZE
+            if (result is AppResult.Success && result.data.size < PAGE_SIZE) _exhausted.value = true
         }
     }
 
     fun loadMore() {
+        val current = _items.value
+        if (current !is UiState.Success) return
         if (_loadingMore.value || _exhausted.value) return
-        val current = _items.value as? UiState.Success ?: return
-        val filters = _filters.value
-        val gen = generation
-        // 先占住闸门再起协程：两次滚动事件挨得很近时不会重复请求、重复追加。
-        _loadingMore.value = true
-        val cursor = offset
-        loadMoreJob = viewModelScope.launch {
-            try {
-                val result = fetch(filters, cursor)
-                // 期间用户改了筛选（reload 已经换了新数据）→ 这一页直接丢掉。
-                if (gen != generation) return@launch
-                when (result) {
-                    is AppResult.Error -> _exhausted.value = true
-                    is AppResult.Success -> {
-                        val fresh = result.data.filter { seen.add(it.id) }
-                        if (fresh.isNotEmpty()) {
-                            // 追加时再整体去一次重，保证送进网格的 id 绝对唯一。
-                            val merged = (current.data + fresh).distinctBy { it.id }
-                            _items.value = UiState.Success(merged)
-                        }
-                        // 接口没有 total：原始条数不满一页就说明到底了。
-                        if (result.data.size < PAGE_SIZE) _exhausted.value = true
-                        offset = cursor + PAGE_SIZE
+        job = viewModelScope.launch {
+            _loadingMore.value = true
+            val filters = _filters.value
+            val result = repository.explore(
+                tags = buildTags(filters),
+                sort = filters.sort.apiValue,
+                start = start,
+                range = ratingRange(filters.rating),
+                type = _type.value,
+            )
+            when (result) {
+                is AppResult.Success -> {
+                    // 该接口不返回 total，只能靠「翻到空页」判断到底。
+                    if (result.data.isEmpty() || result.data.size < PAGE_SIZE) {
+                        _exhausted.value = true
                     }
+                    start += PAGE_SIZE
+                    _items.value = UiState.Success(current.data + result.data)
                 }
-            } finally {
-                if (gen == generation) _loadingMore.value = false
+
+                is AppResult.Error -> _exhausted.value = true
             }
+            _loadingMore.value = false
         }
     }
 
-    private suspend fun fetch(filters: ExploreFilters, start: Int): AppResult<List<Subject>> =
-        repository.premiereFeed(
-            type = _type.value,
-            sort = filters.sort.apiValue,
-            start = start,
-            count = PAGE_SIZE,
-            tags = buildTags(filters).ifEmpty { null }?.joinToString(","),
-            scoreRange = scoreRange(filters.rating),
-        )
-
-    /**
-     * 信息流的 tags 是「体裁,地区,年份」逗号串，空项不传。
-     *
-     * 电影 / 电视剧已经由 path 区分（`/movie/recommend`、`/tv/recommend`），
-     * 综艺和纪录片都挂在 tv 下面，所以要把大类本身当 tag 传。
-     */
     private fun buildTags(filters: ExploreFilters): List<String> = buildList {
-        if (filters.category == "综艺" || filters.category == "纪录片") add(filters.category)
+        add(filters.category)
         if (filters.genre != "全部") add(filters.genre)
         if (filters.region != "全部") add(filters.region)
         if (filters.year != "全部") add(filters.year)
@@ -255,8 +207,8 @@ class ExploreViewModel @Inject constructor(
 
         val RATINGS = listOf("全部", "9分以上", "8分以上", "7分以上", "6分以上", "5分以下")
 
-        /** 信息流的 `score_range` 参数是「评分下限,上限」，服务端过滤。 */
-        fun scoreRange(label: String): String = when (label) {
+        /** 豆瓣 `range` 参数是「评分下限,上限」。 */
+        fun ratingRange(label: String): String = when (label) {
             "9分以上" -> "9,10"
             "8分以上" -> "8,10"
             "7分以上" -> "7,10"

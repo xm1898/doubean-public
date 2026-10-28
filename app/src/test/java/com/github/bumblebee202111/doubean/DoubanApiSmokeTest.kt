@@ -1,6 +1,5 @@
 package com.github.bumblebee202111.doubean
 
-import com.github.bumblebee202111.doubean.core.network.DoubanThrottledException
 import com.github.bumblebee202111.doubean.core.network.api.DoubanApiService
 import com.github.bumblebee202111.doubean.data.subject.toSubject
 import com.github.bumblebee202111.doubean.data.subject.toSubjectDetail
@@ -19,8 +18,6 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertTrue
-import org.junit.Assume
-import kotlinx.coroutines.delay
 import org.junit.Test
 
 /**
@@ -55,7 +52,7 @@ class DoubanApiSmokeTest {
     private val api = DoubanApiService(client)
 
     @Test
-    fun feedCollections() = smoke {
+    fun feedCollections() = runBlocking {
         val ids = listOf(
             "movie_showing", "movie_soon", "movie_top250",
             "tv_hot", "tv_domestic", "tv_american",
@@ -72,7 +69,7 @@ class DoubanApiSmokeTest {
     }
 
     @Test
-    fun detailCreditsPhotos() = smoke {
+    fun detailCreditsPhotos() = runBlocking {
         val detail = api.getSubjectDetail("movie", "1292052").toSubjectDetail(SubjectType.MOVIE)
         assertTrue(detail.title.isNotBlank())
         println("[ok] detail ${detail.title} ${detail.displayMetaInfo} rating=${detail.rating}")
@@ -92,7 +89,7 @@ class DoubanApiSmokeTest {
     }
 
     @Test
-    fun chartAndRecommendations() = smoke {
+    fun chartAndRecommendations() = runBlocking {
         val chart = api.getChart(chartType = 11, start = 0, limit = 5)
             .map { it.toSubjectWithRank(SubjectType.MOVIE) }
         assertTrue(chart.isNotEmpty())
@@ -106,7 +103,7 @@ class DoubanApiSmokeTest {
     }
 
     @Test
-    fun exploreAndSuggest() = smoke {
+    fun exploreAndSuggest() = runBlocking {
         val page = api.newSearchSubjects(tags = "电影,美国,2024", sort = "U", start = 0)
             .map { it.toSubject(SubjectType.MOVIE) }
         assertTrue(page.isNotEmpty())
@@ -147,78 +144,5 @@ class DoubanApiSmokeTest {
         val suggest = api.suggest("生日").map { it.toSearchResultItem(SubjectType.MOVIE) }
         assertTrue(suggest.isNotEmpty())
         println("[ok] suggest=${suggest.size} first=${suggest.first().title}")
-    }
-
-    /**
-     * 「时间」排序用的是官方信息流的 sort=R（首映时间）：年份必须从新到旧，
-     * 翻页还能继续往下走，tags 也照样能过滤。
-     */
-    @Test
-    fun premiereSortIsNewestFirst() = smoke {
-        val feed = api.recommendFeed(type = "movie", sort = "R", start = 0, count = 20)
-        val years = feed.items.mapNotNull { it.cardSubtitle.toYear() }
-        assertTrue(
-            "首映时间排序没拿到年份副标题：${feed.items.take(3).map { it.title to it.cardSubtitle }}",
-            years.size >= 10,
-        )
-        assertTrue("首映时间排序不是从新到旧：$years", years.zipWithNext().all { (a, b) -> a >= b })
-        assertTrue("首映时间排序第一条不是最新年份：$years", years.first() == years.max())
-        println("[ok] 首映时间=${years.first()} 顺序=${years.take(8)}")
-
-        val second = api.recommendFeed(type = "movie", sort = "R", start = 20, count = 20)
-        assertTrue("首映时间翻页没有数据", second.items.isNotEmpty())
-        assertTrue(
-            "翻页返回了和第一页一样的片，start 没生效",
-            feed.items.map { it.id }.toSet().intersect(second.items.map { it.id }.toSet()).isEmpty(),
-        )
-        println("[ok] 首映时间第二页=${second.items.size} first=${second.items.first().title}")
-
-        val comedy = api.recommendFeed(type = "movie", sort = "R", start = 0, count = 10, tags = "喜剧")
-        assertTrue("tags=喜剧 没有数据", comedy.items.isNotEmpty())
-        println("[ok] 首映时间+喜剧=${comedy.items.size} ${comedy.items.take(3).map { it.title }}")
-    }
-
-    /**
-     * 评分区间走信息流的 `score_range`，服务端过滤 —— 传 `8,10` 返回的每一条都必须 ≥ 8 分。
-     * 这个参数名不能写成 `range`（那个只对 `/j/new_search_subjects` 有效，信息流会忽略）。
-     */
-    @Test
-    fun scoreRangeFiltersOnServer() = smoke {
-        val high = api.recommendFeed(type = "movie", sort = "T", start = 0, count = 20, scoreRange = "8,10")
-        assertTrue("score_range=8,10 没有数据", high.items.isNotEmpty())
-        val values = high.items.mapNotNull { it.rating?.value }
-        assertTrue("拿不到评分，没法验证 score_range", values.size >= 10)
-        assertTrue("score_range=8,10 返回了低分片：$values", values.all { it >= 8.0 })
-        println("[ok] score_range=8,10 全部 >=8：${values.take(6)}")
-
-        val low = api.recommendFeed(type = "movie", sort = "T", start = 0, count = 20, scoreRange = "0,6")
-        val lowValues = low.items.mapNotNull { it.rating?.value }
-        assertTrue("score_range=0,6 没有数据", low.items.isNotEmpty())
-        assertTrue("score_range=0,6 返回了高分片：$lowValues", lowValues.all { it <= 6.0 })
-        println("[ok] score_range=0,6 全部 <=6：${lowValues.take(6)}")
-
-        // 首映时间 + 评分区间要能同时生效（这两项都由服务端处理，不会再出现「筛空白屏」）。
-        val newestHigh = api.recommendFeed(
-            type = "movie", sort = "R", start = 0, count = 20, scoreRange = "8,10",
-        )
-        assertTrue("首映时间+score_range 没有数据", newestHigh.items.isNotEmpty())
-        val years = newestHigh.items.mapNotNull { it.cardSubtitle.toYear() }
-        assertTrue("首映时间+评分不是从新到旧：$years", years.zipWithNext().all { (a, b) -> a >= b })
-        println("[ok] 首映时间+8分以上=${newestHigh.items.size} 年份=${years.take(5)}")
-    }
-
-    /** 副标题形如 `2026 / 中国大陆 / 剧情 爱情 / 导演 / 演员`，取开头年份。 */
-    private fun String?.toYear(): Int? =
-        this?.let { Regex("^\\s*(\\d{4})\\s*/").find(it)?.groupValues?.get(1)?.toIntOrNull() }
-
-    /** 豆瓣会限流：被限流就当跳过，别因为外部因素把构建搞红。 */
-    private fun smoke(block: suspend () -> Unit) = runBlocking {
-        try {
-            delay(600)
-            block()
-        } catch (e: DoubanThrottledException) {
-            println("[skip] 豆瓣限流：${e.serverMessage}")
-            Assume.assumeNoException("豆瓣限流，跳过本次联网用例", e)
-        }
     }
 }

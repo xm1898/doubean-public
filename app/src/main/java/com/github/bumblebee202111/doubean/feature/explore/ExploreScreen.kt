@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -108,7 +107,6 @@ fun ExploreScreen(
                             text = sort.label,
                             selected = filters.sort == sort,
                             onClick = { viewModel.setSort(sort) },
-                            tag = "sort_pill_${sort.name}",
                         )
                     }
                 }
@@ -200,13 +198,9 @@ fun ExploreScreen(
                             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .testTag("explore_grid"),
+                            modifier = Modifier.fillMaxSize(),
                         ) {
-                            // key 用「下标 + id」：豆瓣推荐流会重复返回同一部片，只靠 id 仍可能撞 key，
-                            // 撞了 LazyGrid 直接抛 "Key was already used" 闪退。
-                            itemsIndexed(state.data, key = { index, subject -> "$index:${subject.id}" }) { _, subject ->
+                            items(state.data, key = { it.id + it.title }) { subject ->
                                 SubjectCard(
                                     subject = subject,
                                     width = 104,
@@ -276,12 +270,7 @@ private fun FilterRow(
 }
 
 @Composable
-private fun FilterPill(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    tag: String? = null,
-) {
+private fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
@@ -295,9 +284,7 @@ private fun FilterPill(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
-        modifier = Modifier
-            .height(28.dp)
-            .then(if (tag != null) Modifier.testTag(tag) else Modifier),
+        modifier = Modifier.height(28.dp),
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 10.dp),
