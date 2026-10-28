@@ -4,12 +4,16 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
-import com.github.bumblebee202111.doubean.feature.explore.ExploreViewModel
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume
@@ -97,7 +101,7 @@ class AppLaunchTest {
         // 找电影
         rule.onAllNodesWithText("找电影").onFirst().performClick()
         waitUntilText("综合", 20_000)
-        waitUntilTag("subject_card", 30_000)
+        waitUntilExploreCards(3, 40_000)
 
         // 展开筛选面板：类型 / 体裁 / 地区 / 年份 / 评分 五行都在
         rule.onAllNodesWithTag("filter_toggle").onFirst().performClick()
@@ -111,21 +115,19 @@ class AppLaunchTest {
         rule.mainClock.advanceTimeBy(800)
         rule.mainClock.advanceTimeBy(800)
 
-        // 体裁=喜剧 + 评分=8分以上 + 排序=时间，三者叠加后重新出结果
+        // 体裁=喜剧 + 评分=8分以上，两者叠加后重新出结果
+        // （评分区间只有搜索接口支持，时间排序那条信息流是本地过滤，单独在 timeSort 用例里验）
         rule.onAllNodesWithText("喜剧").onFirst().performClick()
         rule.mainClock.advanceTimeBy(500)
         val afterGenre = toggleText()
         rule.onAllNodesWithText("8分以上").onFirst().performClick()
         rule.mainClock.advanceTimeBy(500)
         val afterRating = toggleText()
-        rule.onAllNodesWithText("时间").onFirst().performClick()
-        rule.mainClock.advanceTimeBy(500)
-        val afterSort = toggleText()
         assertTrue(
-            "genre=$afterGenre rating=$afterRating sort=$afterSort",
+            "genre=$afterGenre rating=$afterRating",
             rule.onAllNodesWithText("筛选 2").fetchSemanticsNodes().isNotEmpty(),
         )
-        waitUntilTag("subject_card", 30_000)
+        waitUntilExploreCards(3, 40_000)
         saveScreenshot("explore_filtered")
 
         // 收起面板后看纯结果列表
@@ -144,12 +146,15 @@ class AppLaunchTest {
         saveScreenshot("explore")
 
         // 进详情
-        rule.onAllNodesWithTag("subject_card").onFirst().performClick()
+        exploreCards().onFirst().performClick()
         waitUntilText("演职人员", 30_000)
         saveScreenshot("detail")
     }
 
-    /** 「时间」排序必须把最新的年份排在前面（2026 → 2025 → …），而不是旧片在前。 */
+    /**
+     * 「时间」排序走官方首映时间信息流：卡片副标题形如 `2026 / 中国大陆 / 剧情`，
+     * 列表里的年份必须从新到旧，而不是旧片排在前面。
+     */
     @Test
     fun timeSortShowsNewestYearFirst() {
         rule.mainClock.autoAdvance = false
@@ -157,14 +162,89 @@ class AppLaunchTest {
 
         rule.onAllNodesWithText("找电影").onFirst().performClick()
         waitUntilText("综合", 20_000)
-        waitUntilTag("subject_card", 30_000)
+        waitUntilExploreCards(3, 40_000)
 
         rule.onAllNodesWithText("时间").onFirst().performClick()
 
-        val newestYear = ExploreViewModel.MAX_YEAR.toString()
-        val seen = waitUntilText(newestYear, 40_000)
-        assertTrue("时间排序没有出现最新年份 $newestYear（新片没有排到最前）", seen)
+        val years = waitUntilYears(min = 3, timeoutMs = 40_000)
+        assertTrue("时间排序不是从新到旧：$years", years.zipWithNext().all { (a, b) -> a >= b })
+        assertTrue("时间排序的第一部不是最新年份：$years", years.first() == years.max())
+        println("[ok] 时间排序年份顺序=${years.take(9)}")
         saveScreenshot("explore_time")
+    }
+
+    /**
+     * 连续下拉翻页不能崩：之前同一部片在两页里重复出现，`items(key = …)` 撞 key
+     * 会让 LazyVerticalGrid 抛 `Key was already used`，表现就是「刷两下闪退」。
+     */
+    @Test
+    fun pagingDoesNotCrashOnRepeatedScroll() {
+        rule.mainClock.autoAdvance = false
+        waitUntilText("正在上映", 40_000)
+
+        rule.onAllNodesWithText("找电影").onFirst().performClick()
+        waitUntilText("综合", 20_000)
+        waitUntilExploreCards(3, 40_000)
+
+        repeat(4) { round ->
+            exploreCards().onLast().performTouchInput { swipeUp() }
+            // 给翻页请求 + 重组留时间
+            repeat(20) { rule.mainClock.advanceTimeBy(50) }
+            Thread.sleep(600)
+            rule.mainClock.advanceTimeBy(300)
+            val alive = exploreCards().fetchSemanticsNodes().size
+            if (alive == 0) saveScreenshot("paging_debug")
+            assertTrue(
+                "第 ${round + 1} 次下拉后列表空了（很可能崩了），可见文本=${visibleTexts().take(20)}",
+                alive > 0,
+            )
+            println("[ok] 第 ${round + 1} 次下拉后卡片数=$alive")
+        }
+        saveScreenshot("explore_paged")
+    }
+
+    /** 等结果网格里真的出现卡片（首页卡片不算）。 */
+    private fun waitUntilExploreCards(min: Int, timeoutMs: Long): Int {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var last = 0
+        while (System.currentTimeMillis() < deadline) {
+            rule.mainClock.advanceTimeBy(32)
+            last = exploreCards().fetchSemanticsNodes().size
+            if (last >= min) return last
+            skipIfThrottled()
+            Thread.sleep(300)
+        }
+        throw AssertionError("等待结果卡片超时，可见文本=" + visibleTexts().take(20))
+    }
+
+    /** 点完排序后列表会先回到 Loading，等卡片副标题真正出来再断言。 */
+    private fun waitUntilYears(min: Int, timeoutMs: Long): List<Int> {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var last: List<Int> = emptyList()
+        while (System.currentTimeMillis() < deadline) {
+            rule.mainClock.advanceTimeBy(32)
+            last = visibleCardYears()
+            if (last.size >= min) return last
+            skipIfThrottled()
+            Thread.sleep(300)
+        }
+        throw AssertionError("等待年份副标题超时，可见文本=" + visibleTexts().take(30))
+    }
+
+    /** 只看结果网格里的卡片：首页也用了同一个 SubjectCard，不加范围会串。 */
+    private fun exploreCards() = rule.onAllNodes(
+        hasTestTag("subject_card") and hasAnyAncestor(hasTestTag("explore_grid")),
+    )
+
+    private fun visibleTexts(): List<String> =
+        rule.onAllNodes(hasAnyAncestor(hasTestTag("explore_grid")))
+            .fetchSemanticsNodes()
+            .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }
+
+    /** 把结果网格里卡片副标题（形如 `2026 / 中国大陆 / …`）的年份按顺序读出来。 */
+    private fun visibleCardYears(): List<Int> {
+        val pattern = Regex("^\\s*(\\d{4})\\s*/")
+        return visibleTexts().mapNotNull { pattern.find(it)?.groupValues?.get(1)?.toIntOrNull() }
     }
 
     private fun toggleText(): String = rule.onAllNodesWithTag("filter_toggle")

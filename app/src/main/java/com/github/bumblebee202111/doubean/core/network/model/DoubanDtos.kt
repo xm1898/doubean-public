@@ -178,6 +178,23 @@ data class DtoRecommendSubject(
     val rating: DtoRating? = null,
     val uri: String? = null,
     val url: String? = null,
+    /** 信息流里会混进榜单卡（`chart`）之类的非条目卡，只有 `subject` 才是能打开的条目。 */
+    val card: String? = null,
+)
+
+/** /rexxar/api/v2/{movie|tv}/recommend 的排序项：T=综合 U=近期热度 R=首映时间 S=高分优先 */
+@Serializable
+data class DtoSortOption(
+    val text: String = "",
+    val name: String = "",
+    val checked: Boolean = false,
+)
+
+/** /rexxar/api/v2/{movie|tv}/recommend 信息流（官方「选电影/选剧集」页用的就是它）。 */
+@Serializable
+data class NetworkRecommendFeed(
+    val sorts: List<DtoSortOption> = emptyList(),
+    val items: List<DtoRecommendSubject> = emptyList(),
 )
 
 /** /j/chart/top_list 榜单条目 */

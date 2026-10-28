@@ -10,7 +10,6 @@ import com.github.bumblebee202111.doubean.data.subject.toPhotoList
 import com.github.bumblebee202111.doubean.data.subject.toRecommendSubject
 import com.github.bumblebee202111.doubean.data.subject.toSearchResultItem
 import com.github.bumblebee202111.doubean.model.subject.Rating
-import com.github.bumblebee202111.doubean.feature.explore.ExploreViewModel
 import com.github.bumblebee202111.doubean.model.subject.SubjectType
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -151,31 +150,37 @@ class DoubanApiSmokeTest {
     }
 
     /**
-     * 「时间」排序靠按年份倒着翻实现：最新年份有片、次新年份有片，
-     * 且年份会写到卡片副标题上，这样列表看上去就是「新片在前」。
+     * 「时间」排序用的是官方信息流的 sort=R（首映时间）：年份必须从新到旧，
+     * 翻页还能继续往下走，tags 也照样能过滤。
      */
     @Test
-    fun timeSortWalksBackByYear() = smoke {
-        val newest = ExploreViewModel.MAX_YEAR.toString()
-        val thisYear = api.newSearchSubjects(tags = "电影,$newest", sort = "T", start = 0)
-            .map { it.toSubject(SubjectType.MOVIE, yearHint = newest) }
-        assertTrue("$newest 年没有数据", thisYear.isNotEmpty())
+    fun premiereSortIsNewestFirst() = smoke {
+        val feed = api.recommendFeed(type = "movie", sort = "R", start = 0, count = 20)
+        val years = feed.items.mapNotNull { it.cardSubtitle.toYear() }
         assertTrue(
-            "年份没写到副标题：${thisYear.take(3).map { it.title to it.cardSubtitle }}",
-            thisYear.all { it.cardSubtitle == newest },
+            "首映时间排序没拿到年份副标题：${feed.items.take(3).map { it.title to it.cardSubtitle }}",
+            years.size >= 10,
         )
-        println("[ok] 时间排序 $newest=${thisYear.size} ${thisYear.take(3).map { it.title }}")
+        assertTrue("首映时间排序不是从新到旧：$years", years.zipWithNext().all { (a, b) -> a >= b })
+        assertTrue("首映时间排序第一条不是最新年份：$years", years.first() == years.max())
+        println("[ok] 首映时间=${years.first()} 顺序=${years.take(8)}")
 
-        val prev = (ExploreViewModel.MAX_YEAR - 1).toString()
-        val lastYear = api.newSearchSubjects(tags = "电影,$prev", sort = "T", start = 0)
-            .map { it.toSubject(SubjectType.MOVIE, yearHint = prev) }
-        assertTrue("$prev 年没有数据", lastYear.isNotEmpty())
+        val second = api.recommendFeed(type = "movie", sort = "R", start = 20, count = 20)
+        assertTrue("首映时间翻页没有数据", second.items.isNotEmpty())
         assertTrue(
-            "$newest 与 $prev 返回了同一批片，年份筛选没生效",
-            thisYear.map { it.id }.toSet().intersect(lastYear.map { it.id }.toSet()).isEmpty(),
+            "翻页返回了和第一页一样的片，start 没生效",
+            feed.items.map { it.id }.toSet().intersect(second.items.map { it.id }.toSet()).isEmpty(),
         )
-        println("[ok] 时间排序 $prev=${lastYear.size} ${lastYear.take(3).map { it.title }}")
+        println("[ok] 首映时间第二页=${second.items.size} first=${second.items.first().title}")
+
+        val comedy = api.recommendFeed(type = "movie", sort = "R", start = 0, count = 10, tags = "喜剧")
+        assertTrue("tags=喜剧 没有数据", comedy.items.isNotEmpty())
+        println("[ok] 首映时间+喜剧=${comedy.items.size} ${comedy.items.take(3).map { it.title }}")
     }
+
+    /** 副标题形如 `2026 / 中国大陆 / 剧情 爱情 / 导演 / 演员`，取开头年份。 */
+    private fun String?.toYear(): Int? =
+        this?.let { Regex("^\\s*(\\d{4})\\s*/").find(it)?.groupValues?.get(1)?.toIntOrNull() }
 
     /** 豆瓣会限流：被限流就当跳过，别因为外部因素把构建搞红。 */
     private fun smoke(block: suspend () -> Unit) = runBlocking {

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.bumblebee202111.doubean.data.subject.SubjectRepository
 import com.github.bumblebee202111.doubean.model.AppResult
+import com.github.bumblebee202111.doubean.model.subject.Rating
 import com.github.bumblebee202111.doubean.model.subject.Subject
 import com.github.bumblebee202111.doubean.model.subject.SubjectType
 import com.github.bumblebee202111.doubean.ui.UiState
@@ -16,11 +17,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** 找电影 / 找电视的排序方式。 */
+/**
+ * 找电影 / 找电视的排序方式。
+ *
+ * 「时间」走的是官方「选电影/选剧集」页那条信息流（`sort=R` 才是首映时间），
+ * 另外两个继续用 `new_search_subjects`，因为它支持体裁/地区/年份/评分区间组合。
+ */
 enum class ExploreSort(val label: String, val apiValue: String) {
     RECOMMEND("综合", "U"),
     RANK("评分", "S"),
-    TIME("时间", "T"),
+    TIME("时间", "R"),
 }
 
 data class ExploreFilters(
@@ -60,16 +66,22 @@ class ExploreViewModel @Inject constructor(
     val exhausted: StateFlow<Boolean> = _exhausted.asStateFlow()
 
     private var started = false
-    private var start = 0
     private var job: Job? = null
 
-    // 「时间排序 + 年份=全部」时按年份倒着翻：先 2026，再 2025…，保证新片永远在最前面。
-    private var yearCursor = 0
-    private var yearStart = 0
+    /** `new_search_subjects` 的翻页游标。 */
+    private var searchStart = 0
 
-    /** 豆瓣的 sort=T 在「年份=全部」下并不按年份倒序，只能自己按年份往回走。 */
-    private val ExploreFilters.isTimeCrawl: Boolean
-        get() = sort == ExploreSort.TIME && year == "全部"
+    /** 官方信息流的翻页游标（按原始条数走，不受本地评分过滤影响）。 */
+    private var feedStart = 0
+
+    /** 已经展示过的 id，避免同一部片子在两页里重复出现把列表撑出重复 key。 */
+    private val seen = mutableSetOf<String>()
+
+    private data class Page(
+        val items: List<Subject>,
+        val rawCount: Int,
+        val nextOffset: Int,
+    )
 
     fun start(type: SubjectType) {
         if (started && _type.value == type) return
@@ -118,125 +130,140 @@ class ExploreViewModel @Inject constructor(
 
     fun reload() {
         job?.cancel()
-        start = 0
+        searchStart = 0
+        feedStart = 0
+        seen.clear()
         _exhausted.value = false
+        _loadingMore.value = false
         val filters = _filters.value
         job = viewModelScope.launch {
             _items.value = UiState.Loading
-            if (filters.isTimeCrawl) {
-                yearCursor = MAX_YEAR
-                yearStart = 0
-                val result = fetchTimeChunk(filters, PAGE_SIZE)
-                _items.value = result.toUiState()
-                if (result is AppResult.Success && result.data.size < PAGE_SIZE) _exhausted.value = true
-                return@launch
+            when (val result = fetch(filters, offset = 0)) {
+                is AppResult.Error -> _items.value = result.toUiState()
+                is AppResult.Success -> {
+                    seen += result.data.items.map { it.id }
+                    _items.value = UiState.Success(result.data.items)
+                    if (result.data.rawCount < PAGE_SIZE) _exhausted.value = true
+                    if (filters.sort == ExploreSort.TIME) {
+                        feedStart = result.data.nextOffset
+                    } else {
+                        searchStart = PAGE_SIZE
+                    }
+                }
             }
-            val result = repository.explore(
-                tags = buildTags(filters),
-                sort = filters.sort.apiValue,
-                start = 0,
-                range = ratingRange(filters.rating),
-                type = _type.value,
-            )
-            _items.value = result.toUiState()
-            start = PAGE_SIZE
-            if (result is AppResult.Success && result.data.size < PAGE_SIZE) _exhausted.value = true
         }
     }
 
     fun loadMore() {
-        val current = _items.value
-        if (current !is UiState.Success) return
+        val current = _items.value as? UiState.Success ?: return
         if (_loadingMore.value || _exhausted.value) return
         val filters = _filters.value
-        job = viewModelScope.launch {
-            _loadingMore.value = true
-            if (filters.isTimeCrawl) {
-                val result = fetchTimeChunk(filters, PAGE_SIZE)
-                when (result) {
-                    is AppResult.Success -> {
-                        if (result.data.isEmpty() || result.data.size < PAGE_SIZE) _exhausted.value = true
-                        if (result.data.isNotEmpty()) {
-                            _items.value = UiState.Success(current.data + result.data)
-                        }
-                    }
-
-                    is AppResult.Error -> _exhausted.value = true
-                }
-                _loadingMore.value = false
-                return@launch
-            }
-            val result = repository.explore(
-                tags = buildTags(filters),
-                sort = filters.sort.apiValue,
-                start = start,
-                range = ratingRange(filters.rating),
-                type = _type.value,
-            )
-            when (result) {
-                is AppResult.Success -> {
-                    // 该接口不返回 total，只能靠「翻到空页」判断到底。
-                    if (result.data.isEmpty() || result.data.size < PAGE_SIZE) {
-                        _exhausted.value = true
-                    }
-                    start += PAGE_SIZE
-                    _items.value = UiState.Success(current.data + result.data)
-                }
-
+        // 先占住闸门再起协程：两次滚动事件挨得很近时不会重复请求、重复追加。
+        _loadingMore.value = true
+        val offset = if (filters.sort == ExploreSort.TIME) feedStart else searchStart
+        viewModelScope.launch {
+            when (val result = fetch(filters, offset)) {
                 is AppResult.Error -> _exhausted.value = true
+                is AppResult.Success -> {
+                    val fresh = result.data.items.filter { seen.add(it.id) }
+                    if (fresh.isNotEmpty()) {
+                        _items.value = UiState.Success(current.data + fresh)
+                    }
+                    // 接口没有 total：原始条数不满一页就说明到底了。
+                    if (result.data.rawCount < PAGE_SIZE) _exhausted.value = true
+                    if (filters.sort == ExploreSort.TIME) {
+                        feedStart = result.data.nextOffset
+                    } else {
+                        searchStart = offset + PAGE_SIZE
+                    }
+                }
             }
             _loadingMore.value = false
         }
     }
 
+    private suspend fun fetch(filters: ExploreFilters, offset: Int): AppResult<Page> =
+        if (filters.sort == ExploreSort.TIME) fetchPremiere(filters, offset) else fetchSearch(filters, offset)
+
     /**
-     * 从 [yearCursor] 开始按年份倒序取，凑够 [target] 条或翻到 [MIN_YEAR] 为止。
+     * 官方信息流：sort=R 是首映时间，翻页靠 start/count。
      *
-     * 每翻完一年游标就减一，所以「时间」排序天然从最新往回走；接口没有 total，
-     * 靠「这一年返回不满 20 条」判断该年翻完。
+     * 信息流不支持评分区间，只能本地过滤；而新片常常还没有评分，
+     * 所以本地过滤把一页筛空时要继续往后翻，不然「时间 + 8分以上」会直接白屏。
      */
-    private suspend fun fetchTimeChunk(
-        filters: ExploreFilters,
-        target: Int,
-    ): AppResult<List<Subject>> {
+    private suspend fun fetchPremiere(filters: ExploreFilters, offset: Int): AppResult<Page> {
+        val tags = buildTags(filters).ifEmpty { null }?.joinToString(",")
         val acc = mutableListOf<Subject>()
+        var cursor = offset
+        var lastRaw = 0
         var hops = 0
-        while (acc.size < target && yearCursor >= MIN_YEAR && hops++ < MAX_YEAR_HOPS) {
-            val year = yearCursor.toString()
-            val result = repository.explore(
-                tags = buildTags(filters, year),
-                sort = ExploreSort.TIME.apiValue,
-                start = yearStart,
-                range = ratingRange(filters.rating),
-                type = _type.value,
-                yearHint = year,
-            )
-            when (result) {
-                is AppResult.Error -> return if (acc.isEmpty()) result else AppResult.Success(acc)
+        while (hops++ < MAX_FEED_HOPS) {
+            when (
+                val result = repository.premiereFeed(
+                    type = _type.value,
+                    sort = ExploreSort.TIME.apiValue,
+                    start = cursor,
+                    count = PAGE_SIZE,
+                    tags = tags,
+                )
+            ) {
+                is AppResult.Error ->
+                    return if (acc.isEmpty()) result else AppResult.Success(Page(acc, PAGE_SIZE, cursor))
+
                 is AppResult.Success -> {
-                    acc += result.data
-                    if (result.data.size < PAGE_SIZE) {
-                        yearCursor--
-                        yearStart = 0
-                    } else {
-                        yearStart += PAGE_SIZE
-                    }
+                    lastRaw = result.data.size
+                    acc += result.data.filter { matchesRating(it, filters.rating) }
+                    cursor += PAGE_SIZE
+                    if (lastRaw < PAGE_SIZE || acc.size >= PAGE_SIZE) break
                 }
             }
         }
-        return AppResult.Success(acc)
+        return AppResult.Success(Page(acc, lastRaw, cursor))
     }
 
-    private fun buildTags(filters: ExploreFilters, yearOverride: String? = null): List<String> = buildList {
+    private suspend fun fetchSearch(filters: ExploreFilters, offset: Int): AppResult<Page> =
+        when (
+            val result = repository.explore(
+                tags = buildTags(filters),
+                sort = filters.sort.apiValue,
+                start = offset,
+                range = ratingRange(filters.rating),
+                type = _type.value,
+            )
+        ) {
+            is AppResult.Error -> result
+            is AppResult.Success -> AppResult.Success(
+                Page(result.data, result.data.size, offset + PAGE_SIZE),
+            )
+        }
+
+    /** 官方信息流的 tags 是「大类,体裁,地区,年份」，空项不传。 */
+    private fun buildTags(filters: ExploreFilters): List<String> = buildList {
         add(filters.category)
         if (filters.genre != "全部") add(filters.genre)
         if (filters.region != "全部") add(filters.region)
-        val year = yearOverride ?: filters.year.takeIf { it != "全部" }
-        if (year != null) add(year)
+        if (filters.year != "全部") add(filters.year)
+    }
+
+    /** 官方信息流不支持评分区间参数，只能本地过滤。 */
+    private fun matchesRating(subject: Subject, label: String): Boolean {
+        if (label == "全部") return true
+        val value = (subject.rating as? Rating.NonNull)?.value ?: return false
+        return when (label) {
+            "9分以上" -> value >= 9f
+            "8分以上" -> value >= 8f
+            "7分以上" -> value >= 7f
+            "6分以上" -> value >= 6f
+            "5分以下" -> value <= 5f
+            else -> true
+        }
     }
 
     companion object {
         const val PAGE_SIZE = 20
+
+        /** 本地过滤把整页筛空时，最多连着往后翻几页，避免白屏又不至于打太多请求。 */
+        const val MAX_FEED_HOPS = 6
 
         val CATEGORIES = listOf("电影", "电视剧", "综艺", "纪录片")
 
@@ -276,14 +303,6 @@ class ExploreViewModel @Inject constructor(
         )
 
         val RATINGS = listOf("全部", "9分以上", "8分以上", "7分以上", "6分以上", "5分以下")
-
-        /** 「时间」排序从这一年开始往前翻（取年份列表里最新的那一年）。 */
-        val MAX_YEAR: Int = YEARS.firstNotNullOfOrNull { it.toIntOrNull() } ?: 2026
-
-        const val MIN_YEAR = 1980
-
-        /** 单次加载最多换几个年份，避免极端情况下一直空转到卡死。 */
-        const val MAX_YEAR_HOPS = 12
 
         /** 豆瓣 `range` 参数是「评分下限,上限」。 */
         fun ratingRange(label: String): String = when (label) {

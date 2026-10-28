@@ -191,16 +191,26 @@ fun ExploreScreen(
                 is UiState.Error -> ErrorBox(state.message, onRetry = viewModel::reload)
                 is UiState.Success -> {
                     if (state.data.isEmpty()) {
-                        EmptyBox("没有符合条件的结果，换个筛选试试")
+                        EmptyBox(
+                            if (filters.sort == ExploreSort.TIME && filters.rating != "全部") {
+                                // 首映时间信息流里新片大多还没评分，本地按分数筛就很容易筛空。
+                                "按首映时间排序时，新片大多还没有评分，先把「${filters.rating}」去掉试试"
+                            } else {
+                                "没有符合条件的结果，换个筛选试试"
+                            }
+                        )
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag("explore_grid"),
                         ) {
-                            items(state.data, key = { it.id + it.title }) { subject ->
+                            // key 只用 id：翻页时同一部片可能再次返回，拼接 title 反而会撞 key 崩溃。
+                            items(state.data, key = { it.id }) { subject ->
                                 SubjectCard(
                                     subject = subject,
                                     width = 104,
