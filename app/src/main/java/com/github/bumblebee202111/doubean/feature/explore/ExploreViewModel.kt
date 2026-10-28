@@ -71,6 +71,13 @@ class ExploreViewModel @Inject constructor(
 
     private var started = false
     private var job: Job? = null
+    private var loadMoreJob: Job? = null
+
+    /**
+     * 数据代次。每次 reload 自增；loadMore 在协程里发现代次变了就直接丢弃结果，
+     * 否则「改筛选 → 旧的一页追加回来」会把新旧两批数据混在一起，出现重复 id 撞 key 崩溃。
+     */
+    private var generation = 0
 
     /** 信息流的翻页游标。 */
     private var offset = 0
@@ -126,6 +133,8 @@ class ExploreViewModel @Inject constructor(
 
     fun reload() {
         job?.cancel()
+        loadMoreJob?.cancel()
+        generation++
         offset = 0
         seen.clear()
         _exhausted.value = false
@@ -136,8 +145,11 @@ class ExploreViewModel @Inject constructor(
             when (val result = fetch(filters, start = 0)) {
                 is AppResult.Error -> _items.value = result.toUiState()
                 is AppResult.Success -> {
-                    seen += result.data.map { it.id }
-                    _items.value = UiState.Success(result.data)
+                    // 同一页内部也可能重复（榜单卡、推荐位会撞），先在页内去一次重，
+                    // 否则 LazyVerticalGrid 拿到两个一样的 key 会直接抛异常闪退。
+                    val page = result.data.distinctBy { it.id }
+                    seen += page.map { it.id }
+                    _items.value = UiState.Success(page)
                     if (result.data.size < PAGE_SIZE) _exhausted.value = true
                     offset = PAGE_SIZE
                 }
@@ -146,26 +158,35 @@ class ExploreViewModel @Inject constructor(
     }
 
     fun loadMore() {
-        val current = _items.value as? UiState.Success ?: return
         if (_loadingMore.value || _exhausted.value) return
+        val current = _items.value as? UiState.Success ?: return
         val filters = _filters.value
+        val gen = generation
         // 先占住闸门再起协程：两次滚动事件挨得很近时不会重复请求、重复追加。
         _loadingMore.value = true
         val cursor = offset
-        viewModelScope.launch {
-            when (val result = fetch(filters, cursor)) {
-                is AppResult.Error -> _exhausted.value = true
-                is AppResult.Success -> {
-                    val fresh = result.data.filter { seen.add(it.id) }
-                    if (fresh.isNotEmpty()) {
-                        _items.value = UiState.Success(current.data + fresh)
+        loadMoreJob = viewModelScope.launch {
+            try {
+                val result = fetch(filters, cursor)
+                // 期间用户改了筛选（reload 已经换了新数据）→ 这一页直接丢掉。
+                if (gen != generation) return@launch
+                when (result) {
+                    is AppResult.Error -> _exhausted.value = true
+                    is AppResult.Success -> {
+                        val fresh = result.data.filter { seen.add(it.id) }
+                        if (fresh.isNotEmpty()) {
+                            // 追加时再整体去一次重，保证送进网格的 id 绝对唯一。
+                            val merged = (current.data + fresh).distinctBy { it.id }
+                            _items.value = UiState.Success(merged)
+                        }
+                        // 接口没有 total：原始条数不满一页就说明到底了。
+                        if (result.data.size < PAGE_SIZE) _exhausted.value = true
+                        offset = cursor + PAGE_SIZE
                     }
-                    // 接口没有 total：原始条数不满一页就说明到底了。
-                    if (result.data.size < PAGE_SIZE) _exhausted.value = true
-                    offset = cursor + PAGE_SIZE
                 }
+            } finally {
+                if (gen == generation) _loadingMore.value = false
             }
-            _loadingMore.value = false
         }
     }
 

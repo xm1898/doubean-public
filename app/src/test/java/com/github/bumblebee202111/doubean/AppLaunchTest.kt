@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
@@ -201,6 +202,42 @@ class AppLaunchTest {
             println("[ok] 第 ${round + 1} 次下拉后卡片数=$alive")
         }
         saveScreenshot("explore_paged")
+    }
+
+    /**
+     * 边翻页边来回切排序：旧请求晚回来时不能把新列表污染成重复 id，
+     * 也不能让 LazyGrid 撞 key 崩掉。
+     */
+    @Test
+    fun rapidSortSwitchDuringPagingDoesNotCrash() {
+        rule.mainClock.autoAdvance = false
+        waitUntilText("正在上映", 40_000)
+
+        rule.onAllNodesWithText("找电影").onFirst().performClick()
+        waitUntilText("综合", 20_000)
+        waitUntilExploreCards(3, 40_000)
+
+        repeat(3) { round ->
+            exploreCards().onLast().performTouchInput { swipeUp() }
+            repeat(6) { rule.mainClock.advanceTimeBy(50) }
+
+            listOf("RANK", "TIME", "RECOMMEND").forEach { sort ->
+                rule.onNodeWithTag("sort_pill_$sort").performClick()
+                repeat(5) { rule.mainClock.advanceTimeBy(50) }
+            }
+
+            Thread.sleep(500)
+            repeat(10) { rule.mainClock.advanceTimeBy(50) }
+
+            // 切排序会先回到 Loading，等新一页回来；等不到就是崩了或卡死。
+            val alive = waitUntilExploreCards(1, 25_000)
+            if (alive == 0) saveScreenshot("sort_stress_debug")
+            assertTrue(
+                "第 ${round + 1} 轮边翻页边切排序后没有卡片回来（很可能崩了），可见文本=${visibleTexts().take(20)}",
+                alive > 0,
+            )
+            println("[ok] 第 ${round + 1} 轮切排序后卡片数=$alive")
+        }
     }
 
     /** 等结果网格里真的出现卡片（首页卡片不算）。 */
