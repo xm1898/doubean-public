@@ -178,6 +178,35 @@ class DoubanApiSmokeTest {
         println("[ok] 首映时间+喜剧=${comedy.items.size} ${comedy.items.take(3).map { it.title }}")
     }
 
+    /**
+     * 评分区间走信息流的 `score_range`，服务端过滤 —— 传 `8,10` 返回的每一条都必须 ≥ 8 分。
+     * 这个参数名不能写成 `range`（那个只对 `/j/new_search_subjects` 有效，信息流会忽略）。
+     */
+    @Test
+    fun scoreRangeFiltersOnServer() = smoke {
+        val high = api.recommendFeed(type = "movie", sort = "T", start = 0, count = 20, scoreRange = "8,10")
+        assertTrue("score_range=8,10 没有数据", high.items.isNotEmpty())
+        val values = high.items.mapNotNull { it.rating?.value }
+        assertTrue("拿不到评分，没法验证 score_range", values.size >= 10)
+        assertTrue("score_range=8,10 返回了低分片：$values", values.all { it >= 8.0 })
+        println("[ok] score_range=8,10 全部 >=8：${values.take(6)}")
+
+        val low = api.recommendFeed(type = "movie", sort = "T", start = 0, count = 20, scoreRange = "0,6")
+        val lowValues = low.items.mapNotNull { it.rating?.value }
+        assertTrue("score_range=0,6 没有数据", low.items.isNotEmpty())
+        assertTrue("score_range=0,6 返回了高分片：$lowValues", lowValues.all { it <= 6.0 })
+        println("[ok] score_range=0,6 全部 <=6：${lowValues.take(6)}")
+
+        // 首映时间 + 评分区间要能同时生效（这两项都由服务端处理，不会再出现「筛空白屏」）。
+        val newestHigh = api.recommendFeed(
+            type = "movie", sort = "R", start = 0, count = 20, scoreRange = "8,10",
+        )
+        assertTrue("首映时间+score_range 没有数据", newestHigh.items.isNotEmpty())
+        val years = newestHigh.items.mapNotNull { it.cardSubtitle.toYear() }
+        assertTrue("首映时间+评分不是从新到旧：$years", years.zipWithNext().all { (a, b) -> a >= b })
+        println("[ok] 首映时间+8分以上=${newestHigh.items.size} 年份=${years.take(5)}")
+    }
+
     /** 副标题形如 `2026 / 中国大陆 / 剧情 爱情 / 导演 / 演员`，取开头年份。 */
     private fun String?.toYear(): Int? =
         this?.let { Regex("^\\s*(\\d{4})\\s*/").find(it)?.groupValues?.get(1)?.toIntOrNull() }

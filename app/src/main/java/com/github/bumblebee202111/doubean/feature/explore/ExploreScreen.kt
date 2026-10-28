@@ -191,14 +191,7 @@ fun ExploreScreen(
                 is UiState.Error -> ErrorBox(state.message, onRetry = viewModel::reload)
                 is UiState.Success -> {
                     if (state.data.isEmpty()) {
-                        EmptyBox(
-                            if (filters.sort == ExploreSort.TIME && filters.rating != "全部") {
-                                // 首映时间信息流里新片大多还没评分，本地按分数筛就很容易筛空。
-                                "按首映时间排序时，新片大多还没有评分，先把「${filters.rating}」去掉试试"
-                            } else {
-                                "没有符合条件的结果，换个筛选试试"
-                            }
-                        )
+                        EmptyBox("没有符合条件的结果，换个筛选试试")
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
