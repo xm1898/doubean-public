@@ -1,5 +1,6 @@
 package com.github.bumblebee202111.doubean.data.subject
 
+import com.github.bumblebee202111.doubean.core.network.DoubanThrottledException
 import com.github.bumblebee202111.doubean.core.network.api.DoubanApiService
 import com.github.bumblebee202111.doubean.model.ApiError
 import com.github.bumblebee202111.doubean.model.AppError
@@ -144,13 +145,14 @@ class SubjectRepository @Inject constructor(
         start: Int = 0,
         range: String = "0,10",
         type: SubjectType = SubjectType.MOVIE,
+        yearHint: String? = null,
     ): AppResult<List<Subject>> = call {
         api.newSearchSubjects(
             tags = tags.filter { it.isNotBlank() }.joinToString(","),
             sort = sort,
             start = start,
             range = range,
-        ).map { it.toSubject(type) }
+        ).map { it.toSubject(type, yearHint) }
     }
 
     suspend fun suggest(query: String, type: SubjectType): AppResult<List<SearchResultSubjectItem>> =
@@ -173,6 +175,17 @@ class SubjectRepository @Inject constructor(
                     code = e.response.status.value,
                     message = e.message,
                     request = e.response.call.request.url.toString(),
+                    solutionUri = null,
+                    originalError = e,
+                )
+            )
+        } catch (e: DoubanThrottledException) {
+            AppResult.Error(
+                ApiError(
+                    status = 429,
+                    code = 429,
+                    message = "豆瓣限制访问频率了，歇一会儿再试",
+                    request = "",
                     solutionUri = null,
                     originalError = e,
                 )

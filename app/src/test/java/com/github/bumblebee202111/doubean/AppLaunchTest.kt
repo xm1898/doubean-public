@@ -9,8 +9,10 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import com.github.bumblebee202111.doubean.feature.explore.ExploreViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -147,16 +149,46 @@ class AppLaunchTest {
         saveScreenshot("detail")
     }
 
+    /** 「时间」排序必须把最新的年份排在前面（2026 → 2025 → …），而不是旧片在前。 */
+    @Test
+    fun timeSortShowsNewestYearFirst() {
+        rule.mainClock.autoAdvance = false
+        waitUntilText("正在上映", 40_000)
+
+        rule.onAllNodesWithText("找电影").onFirst().performClick()
+        waitUntilText("综合", 20_000)
+        waitUntilTag("subject_card", 30_000)
+
+        rule.onAllNodesWithText("时间").onFirst().performClick()
+
+        val newestYear = ExploreViewModel.MAX_YEAR.toString()
+        val seen = waitUntilText(newestYear, 40_000)
+        assertTrue("时间排序没有出现最新年份 $newestYear（新片没有排到最前）", seen)
+        saveScreenshot("explore_time")
+    }
+
     private fun toggleText(): String = rule.onAllNodesWithTag("filter_toggle")
         .fetchSemanticsNodes()
         .mapNotNull { it.config.getOrNull(SemanticsProperties.Text)?.joinToString() }
         .joinToString("|")
+
+    /** 豆瓣限流时界面会给出提示；这是外部因素，跳过用例而不是让构建红。 */
+    private fun skipIfThrottled() {
+        val throttled = rule.onAllNodesWithText("豆瓣限制访问频率了，歇一会儿再试")
+            .fetchSemanticsNodes()
+            .isNotEmpty()
+        if (throttled) {
+            println("[skip] 豆瓣限流，跳过本次界面用例")
+            Assume.assumeTrue("豆瓣限流，跳过本次界面用例", false)
+        }
+    }
 
     private fun waitUntilText(text: String, timeoutMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             rule.mainClock.advanceTimeBy(32)
             if (rule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()) return true
+            skipIfThrottled()
             Thread.sleep(300)
         }
         throw AssertionError("等待文本超时: $text")
@@ -167,6 +199,7 @@ class AppLaunchTest {
         while (System.currentTimeMillis() < deadline) {
             rule.mainClock.advanceTimeBy(32)
             if (rule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()) return true
+            skipIfThrottled()
             Thread.sleep(300)
         }
         throw AssertionError("等待节点超时: $tag")
