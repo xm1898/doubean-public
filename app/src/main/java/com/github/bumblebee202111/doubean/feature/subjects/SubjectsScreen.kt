@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
@@ -124,14 +123,11 @@ fun SubjectsScreen(
                                 SectionHeader(title = section.title)
                             }
                             item(key = "${section.id}_row") {
-                                // 同一部片子在推荐流里可能重复出现，先用 id 去重再交给 LazyRow，
-                                // 否则 key 撞了会抛 "Key was already used" 直接闪退。
-                                val rowSubjects = section.subjects.distinctBy { it.id }
                                 LazyRow(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    itemsIndexed(rowSubjects, key = { index, subject -> "$index:${subject.id}" }) { _, subject ->
+                                    items(section.subjects, key = { it.id + it.title }) { subject ->
                                         SubjectCard(
                                             subject = subject,
                                             onClick = { onOpenDetail(it.id, selectedType) },
